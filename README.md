@@ -191,16 +191,8 @@ Each example drives the site's own JavaScript to produce the parameters it deman
 
 | System | Category | Example |
 | :-- | :-- | :-- |
-| **瑞数 Ruishu 5/6** | Dynamic VM / page protection | `fangdi` · `cebwm` |
-| **极验 Geetest** | Slider / one-click | `geetest` |
-| **腾讯天御 Tencent Captcha** | No-feel + slider | `tianyu` |
-| **数美 Shumei** | Slider | `shumei` |
-| **网易易盾 NetEase Yidun** | Smart check | `yidun` |
 | **Akamai Bot Manager 3.x** | sensor_data + sbsd challenge | `akamai` |
-| **阿里 234 / fireyejs** | JSVMP bytecode VM / bx-ua token | `ali234` |
 | **CreepJS** | Fingerprint audit — passes every section | `creepjs` |
-
-Full production data-collection flows: **BOSS 直聘**, **今日头条 Toutiao**, **抖音 Douyin**, **小红书 RedNote**, **Google**.
 
 > 🔒 **Strictly prohibited for any unlawful use.** ruyiJS is provided **solely for research into a new generation of AI browsers.** Live results depend on current network conditions and each site's present responses.
 
@@ -210,18 +202,8 @@ Examples ship inside the package — no need to clone the repo:
 
 ```sh
 python -m ruyijs.examples                      # list every example and its install path
-python -m ruyijs.examples google --query python --pages 1
-python -m ruyijs.examples boss --query ai --city 101210100
-python -m ruyijs.examples fangdi               # 网上房地产 (Ruishu 6)
-python -m ruyijs.examples cebwm --pages 3      # 光大理财 (custom Ruishu)
-python -m ruyijs.examples toutiao --pages 3    # 今日头条
-python -m ruyijs.examples xhs --pages 3        # 小红书 / RedNote home feed
-python -m ruyijs.examples geetest              # 极验 one-click
-python -m ruyijs.examples yidun                # 网易易盾
-python -m ruyijs.examples shumei               # 数美 slider
-python -m ruyijs.examples tianyu               # 腾讯天御
-python -m ruyijs.examples akamai              # Akamai Bot Manager 3.x
-python -m ruyijs.examples ali234              # 阿里 234 / 淘宝 bx-ua
+python -m ruyijs.examples akamai               # Akamai Bot Manager 3.x
+python -m ruyijs.examples creepjs              # CreepJS fingerprint audit
 ```
 
 Every example supports `--direct` (direct connection) and `--proxy http://127.0.0.1:7890`. Add `--help` after a name for all options, and `--output result.json` to save results. Each example directory ships its own README.
@@ -294,8 +276,8 @@ HTTP, HTTPS, and SOCKS5 proxies are supported per-context.
 
 ```sh
 python -m ruyijs.examples              # list all examples
-python -m ruyijs.examples google --query python
 python -m ruyijs.examples akamai --proxy http://127.0.0.1:7890
+python -m ruyijs.examples creepjs
 ```
 </details>
 

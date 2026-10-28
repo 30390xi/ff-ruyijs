@@ -191,16 +191,8 @@ with Context(timeout=10) as context:
 
 | 系统 | 类型 | 示例 |
 | :-- | :-- | :-- |
-| **瑞数 Ruishu 5/6** | 动态 VM / 页面防护 | `fangdi` · `cebwm` |
-| **极验 Geetest** | 滑块 / 一键通过 | `geetest` |
-| **腾讯天御 Tencent Captcha** | 无感 + 滑块 | `tianyu` |
-| **数美 Shumei** | 滑块 | `shumei` |
-| **网易易盾 NetEase Yidun** | 智能验证 | `yidun` |
 | **Akamai Bot Manager 3.x** | sensor_data + sbsd 挑战 | `akamai` |
-| **阿里 234 / fireyejs** | JSVMP 字节码 VM / bx-ua token | `ali234` |
 | **CreepJS** | 指纹审计 —— 全部项目通过 | `creepjs` |
-
-完整的生产级数据采集流程：**BOSS 直聘**、**今日头条**、**抖音**、**小红书**、**Google**。
 
 > 🔒 **严禁用于任何非法用途，仅用于研究新时代 AI 浏览器。** 线上结果取决于当前网络状况与各站点的实时响应。
 
@@ -210,18 +202,8 @@ with Context(timeout=10) as context:
 
 ```sh
 python -m ruyijs.examples                      # 列出全部示例及其安装路径
-python -m ruyijs.examples google --query python --pages 1
-python -m ruyijs.examples boss --query ai --city 101210100
-python -m ruyijs.examples fangdi               # 网上房地产（瑞数 6）
-python -m ruyijs.examples cebwm --pages 3      # 光大理财（瑞数定制）
-python -m ruyijs.examples toutiao --pages 3    # 今日头条
-python -m ruyijs.examples xhs --pages 3        # 小红书 rednote 推荐流
-python -m ruyijs.examples geetest              # 极验一键通过
-python -m ruyijs.examples yidun                # 网易易盾
-python -m ruyijs.examples shumei               # 数美滑块
-python -m ruyijs.examples tianyu               # 腾讯天御
-python -m ruyijs.examples akamai              # Akamai Bot Manager 3.x
-python -m ruyijs.examples ali234              # 阿里 234 / 淘宝 bx-ua
+python -m ruyijs.examples akamai               # Akamai Bot Manager 3.x
+python -m ruyijs.examples creepjs              # CreepJS 指纹审计
 ```
 
 示例均支持 `--direct`（直连）和 `--proxy http://127.0.0.1:7890`，在名称后加 `--help` 查看全部参数，`--output result.json` 可保存结果。各示例目录内附 README。
@@ -294,8 +276,8 @@ with Context(proxy="http://127.0.0.1:7890") as ctx:
 
 ```sh
 python -m ruyijs.examples              # 列出全部示例
-python -m ruyijs.examples google --query python
 python -m ruyijs.examples akamai --proxy http://127.0.0.1:7890
+python -m ruyijs.examples creepjs
 ```
 </details>
 
