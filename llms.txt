@@ -1,8 +1,8 @@
-# ruyiJS
+# ff-ruyijs
 
 > Run any site's JavaScript from Python — with the real Firefox engine.
 
-ruyiJS is a headless Firefox engine for Python. It embeds the genuine SpiderMonkey (Firefox 158) JavaScript engine and the Necko HTTP/1.1·2·3 networking stack in an isolated process, so Python code can execute a site's scripts, pass bot checks, and collect data — without a browser window, without a renderer, and without detection.
+ff-ruyijs is a headless Firefox engine for Python. It embeds the genuine SpiderMonkey (Firefox 158) JavaScript engine and the Necko HTTP/1.1·2·3 networking stack in an isolated process, so Python code can execute a site's scripts, pass bot checks, and collect data — without a browser window, without a renderer, and without detection.
 
 ## Install
 
@@ -43,9 +43,12 @@ with Context() as ctx:
 
 Ruishu 5/6, Geetest, Tencent Captcha, Shumei, NetEase Yidun, Arkose Labs, Akamai Bot Manager 3.x, Alibaba 234/fireyejs, CreepJS (all sections).
 
+## License
+
+ff-ruyijs Source Available License v1.0 — modifications must be open-sourced when distributed; commercial use requires written authorization from the author.
+
 ## Links
 
 - PyPI: https://pypi.org/project/ruyijs/
-- GitHub: https://github.com/martinkeith700/ruyiJS
-- Documentation: https://martinkeith700.github.io/ruyiJS/
+- GitHub: https://github.com/cutetailbud/ff-ruyijs
 - Examples: `python -m ruyijs.examples` to list all

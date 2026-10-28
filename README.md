@@ -8,7 +8,7 @@
 The authentic Firefox JavaScript engine and networking stack, with no window and no renderer —<br>
 made for web scraping, JS reverse engineering, data collection, and getting past bot checks.
 
-[![PyPI](https://img.shields.io/pypi/v/ruyijs?label=pypi&color=111111&logo=pypi&logoColor=white)](https://pypi.org/project/ruyijs/) [![Python](https://img.shields.io/badge/Python-%E2%89%A53.10-111111?logo=python&logoColor=white)](https://pypi.org/project/ruyijs/) [![License](https://img.shields.io/badge/license-MPL--2.0-111111)](LICENSE) [![Windows](https://img.shields.io/badge/Windows%20x64-0078D4?logo=windows&logoColor=white)](https://pypi.org/project/ruyijs/) [![LinuxDO](https://img.shields.io/badge/LinuxDO-community-FFB003?logo=discourse&logoColor=white)](https://linux.do/t/topic/3078486)
+[![PyPI](https://img.shields.io/pypi/v/ruyijs?label=pypi&color=111111&logo=pypi&logoColor=white)](https://pypi.org/project/ruyijs/) [![Python](https://img.shields.io/badge/Python-%E2%89%A53.10-111111?logo=python&logoColor=white)](https://pypi.org/project/ruyijs/) [![License](https://img.shields.io/badge/license-Source%20Available-111111)](LICENSE) [![Windows](https://img.shields.io/badge/Windows%20x64-0078D4?logo=windows&logoColor=white)](https://pypi.org/project/ruyijs/) [![LinuxDO](https://img.shields.io/badge/LinuxDO-community-FFB003?logo=discourse&logoColor=white)](https://linux.do/t/topic/3078486)
 
 <sub>Sponsored by</sub>
 
@@ -267,7 +267,7 @@ No. The wheel bundles the pinned SpiderMonkey + Necko runtime. Everything works 
 - Make sure you use the `with` statement (`with Context() as ctx:`) so the process is cleaned up properly.
 - If using a proxy, verify it is reachable: `context = Context(proxy="http://127.0.0.1:7890")`.
 - Increase the timeout: `Context(timeout=60)`.
-- On Wine, upgrade to ≥ 0.1.5 which fixes a known navigate deadlock ([issue #1](https://github.com/martinkeith700/ruyiJS/issues/1)).
+- On Wine, upgrade to ≥ 0.1.5 which fixes a known navigate deadlock.
 </details>
 
 <details>
@@ -312,8 +312,14 @@ Questions, permission requests, commercial licensing, or just to talk shop — a
 
 ## 📄 License
 
-Licensed under the **[Mozilla Public License 2.0](LICENSE)**. See [`NOTICE`](NOTICE) for third-party attributions.
+Licensed under the **[ff-ruyijs Source Available License v1.0](LICENSE)**.
 
-> 📌 As a courtesy: for **redistribution and commercial use, please obtain the author's permission** — add the author on WeChat (ID: **如意**) or open an issue on [GitHub](https://github.com/martinkeith700/ruyiJS).
+- ✅ Free for personal learning, research, and non-commercial use
+- ✅ Modifications **must be open-sourced** when distributed
+- ❌ Commercial use **requires written authorization** from the author
 
-If ruyiJS saved you from reimplementing a browser, a ⭐ helps others find it.
+To request a commercial license, contact via WeChat (ID: **如意**) or open an issue on [GitHub](https://github.com/cutetailbud/ff-ruyijs).
+
+See [`NOTICE`](NOTICE) for third-party attributions.
+
+If ff-ruyijs saved you from reimplementing a browser, a ⭐ helps others find it.

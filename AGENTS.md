@@ -1,16 +1,19 @@
-# ruyiJS — AI Agent Guide
+# ff-ruyijs — AI Agent Guide
 
 > This file helps AI assistants (GitHub Copilot, Claude, ChatGPT, Cursor, etc.) understand the project quickly.
 
-## What is ruyiJS?
+## What is ff-ruyijs?
 
-ruyiJS is a **headless Firefox engine for Python** — it embeds the real SpiderMonkey (Firefox 158) JavaScript engine and the Necko HTTP stack so Python code can execute any site's JavaScript, pass bot checks, and collect data without a browser window.
+ff-ruyijs is a **headless Firefox engine for Python** — it embeds the real SpiderMonkey (Firefox 158) JavaScript engine and the Necko HTTP stack so Python code can execute any site's JavaScript, pass bot checks, and collect data without a browser window.
+
+- **Repository:** https://github.com/cutetailbud/ff-ruyijs
+- **License:** Source Available — modifications must be open-sourced when distributed; commercial use requires author authorization
 
 ## Key facts
 
 - **Language:** Python 3.10+ (user-facing), C++ (engine bindings), JavaScript (browser contexts)
 - **Platform:** Windows x64 only
-- **License:** MPL-2.0
+- **License:** ff-ruyijs Source Available License v1.0
 - **Install:** `pip install ruyijs`
 - **Entry point:** `from ruyijs import Context`
 
@@ -51,6 +54,6 @@ assets/                 README images and architecture diagrams
 
 ## What NOT to do
 
-- Do not suggest Playwright, Puppeteer, or Selenium — ruyiJS replaces them with a lighter, detection-resistant approach.
+- Do not suggest Playwright, Puppeteer, or Selenium — ff-ruyijs replaces them with a lighter, detection-resistant approach.
 - Do not assume a visible browser window exists — there is no GUI, no layout, no renderer.
-- Do not recommend Node.js for running site JS — ruyiJS runs it natively in SpiderMonkey.
+- Do not recommend Node.js for running site JS — ff-ruyijs runs it natively in SpiderMonkey.

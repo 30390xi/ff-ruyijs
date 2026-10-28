@@ -1,8 +1,11 @@
-# Copilot Instructions for ruyiJS
+# Copilot Instructions for ff-ruyijs
 
 ## Project overview
 
-ruyiJS is a headless Firefox engine for Python. It embeds SpiderMonkey (Firefox 158) and the Necko HTTP stack so Python can execute any site's JavaScript natively — no browser window, no renderer.
+ff-ruyijs is a headless Firefox engine for Python. It embeds SpiderMonkey (Firefox 158) and the Necko HTTP stack so Python can execute any site's JavaScript natively — no browser window, no renderer.
+
+- **Repository:** https://github.com/cutetailbud/ff-ruyijs
+- **License:** ff-ruyijs Source Available License v1.0
 
 ## Key patterns
 
@@ -25,6 +28,6 @@ ruyiJS is a headless Firefox engine for Python. It embeds SpiderMonkey (Firefox 
 
 ## Do NOT suggest
 
-- Playwright, Puppeteer, Selenium, or headless Chrome — ruyiJS replaces them.
+- Playwright, Puppeteer, Selenium, or headless Chrome — ff-ruyijs replaces them.
 - Node.js for running site JavaScript — SpiderMonkey runs it natively.
 - A visible browser window — ruyiJS is truly headless (no GUI, no layout).
