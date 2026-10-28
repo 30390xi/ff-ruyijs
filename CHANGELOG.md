@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-10-29
+
+### Added
+
+- README: document native TLS fingerprint switching across Firefox 100–159
+  (Necko + NSS). Both English and Chinese READMEs updated.
+
 ## [0.1.8] - 2026-10-28
 
 ### Removed
