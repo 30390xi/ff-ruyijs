@@ -16,6 +16,8 @@ made for web scraping, JS reverse engineering, data collection, and getting past
 
 **[Install](#-installation)** &nbsp;·&nbsp; **[Features](#-features)** &nbsp;·&nbsp; **[Verification systems](#-verification-systems-it-defeats)** &nbsp;·&nbsp; **[Examples](#-examples)** &nbsp;·&nbsp; **[FAQ](#-faq--troubleshooting)** &nbsp;·&nbsp; **[Contact](#-contact)** &nbsp;·&nbsp; **[LinuxDO](https://linux.do/t/topic/3078486)** &nbsp;·&nbsp; **English** · [简体中文](README.zh-CN.md)
 
+> **⚠️ Disclaimer:** This project is for researching next-generation AI browsers. Any form of brute-force reverse engineering is strictly rejected. The source code is fully open-source. Unauthorized commercial use is prohibited.
+
 <br>
 
 <picture>
@@ -304,7 +306,7 @@ Questions, permission requests, commercial licensing, or just to talk shop — a
 <table>
 <tr>
 <td align="center"><img src="assets/wechat-qr.jpg" alt="WeChat QR — 如意" width="220"><br><b>WeChat:</b> 如意</td>
-<td align="center"><img src="assets/wechat-group-qr.jpg" alt="Group — AI 浏览器过检测交流群" width="220"><br><b>Group:</b> AI 浏览器过检测交流群</td>
+<td align="center"><img src="assets/wechat-group-qr.jpg" alt="Group — AI 浏览器交流群" width="220"><br><b>Group:</b> AI 浏览器交流群</td>
 </tr>
 </table>
 

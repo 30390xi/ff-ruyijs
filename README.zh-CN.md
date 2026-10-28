@@ -16,6 +16,8 @@
 
 **[安装](#-安装)** &nbsp;·&nbsp; **[功能](#-功能)** &nbsp;·&nbsp; **[攻克的验证系统](#-攻克的验证系统)** &nbsp;·&nbsp; **[示例](#-运行示例)** &nbsp;·&nbsp; **[FAQ](#-常见问题)** &nbsp;·&nbsp; **[联系](#-联系方式)** &nbsp;·&nbsp; **[LinuxDO](https://linux.do/t/topic/3078486)** &nbsp;·&nbsp; [English](README.md) · **简体中文**
 
+> **⚠️ 声明：** 本项目用于研究新一代 AI 浏览器，拒绝任何形式的暴力逆向破解。源码全部开源，禁止未经授权的商业化用途。
+
 <br>
 
 <picture>
