@@ -8,7 +8,7 @@
 原生的 Firefox JavaScript 引擎与网络栈，没有窗口、没有渲染器 ——<br>
 专为网页抓取、JS 逆向、数据采集与绕过人机验证而生。
 
-[![PyPI](https://img.shields.io/pypi/v/ruyijs?label=pypi&color=111111&logo=pypi&logoColor=white)](https://pypi.org/project/ruyijs/) [![Python](https://img.shields.io/badge/Python-%E2%89%A53.10-111111?logo=python&logoColor=white)](https://pypi.org/project/ruyijs/) [![License](https://img.shields.io/badge/license-MPL--2.0-111111)](LICENSE) [![Windows](https://img.shields.io/badge/Windows%20x64-0078D4?logo=windows&logoColor=white)](https://pypi.org/project/ruyijs/) [![LinuxDO](https://img.shields.io/badge/LinuxDO-社区-FFB003?logo=discourse&logoColor=white)](https://linux.do/t/topic/3078486)
+[![PyPI](https://img.shields.io/pypi/v/ruyijs?label=pypi&color=111111&logo=pypi&logoColor=white)](https://pypi.org/project/ruyijs/) [![Python](https://img.shields.io/badge/Python-%E2%89%A53.10-111111?logo=python&logoColor=white)](https://pypi.org/project/ruyijs/) [![License](https://img.shields.io/badge/license-Source%20Available-111111)](LICENSE) [![Windows](https://img.shields.io/badge/Windows%20x64-0078D4?logo=windows&logoColor=white)](https://pypi.org/project/ruyijs/) [![LinuxDO](https://img.shields.io/badge/LinuxDO-社区-FFB003?logo=discourse&logoColor=white)](https://linux.do/t/topic/3078486)
 
 <sub>赞助商</sub>
 
@@ -267,7 +267,7 @@ Windows x64（64 位）上的 Python 3.10 及以上版本，已测试至 Python 
 - 确保使用 `with` 语句（`with Context() as ctx:`），以正确清理进程。
 - 如果使用代理，请检查代理是否可达：`Context(proxy="http://127.0.0.1:7890")`。
 - 增大超时：`Context(timeout=60)`。
-- 在 Wine 上运行请升级至 ≥ 0.1.5，该版本修复了已知的 navigate 死锁（[issue #1](https://github.com/martinkeith700/ruyiJS/issues/1)）。
+- 在 Wine 上运行请升级至 ≥ 0.1.5，该版本修复了已知的 navigate 死锁。
 </details>
 
 <details>
@@ -312,8 +312,14 @@ python -m ruyijs.examples akamai --proxy http://127.0.0.1:7890
 
 ## 📄 许可证
 
-基于 **[Mozilla Public License 2.0](LICENSE)** 开源，第三方声明见 [`NOTICE`](NOTICE)。
+基于 **[ff-ruyijs Source Available License v1.0](LICENSE)** 发布。
 
-> 📌 温馨提示：**二次分发和商业化请取得作者许可** —— 可添加作者微信（**如意**）或在 [GitHub](https://github.com/martinkeith700/ruyiJS) 提交 issue。
+- ✅ 个人学习、学术研究、非商业用途可自由使用
+- ✅ 修改后分发**必须开源**完整源码
+- ❌ 商业用途**必须取得作者书面授权**
 
-如果 ruyiJS 帮你省下了重写一个浏览器的功夫，点个 ⭐ 能让更多人发现它。
+商业授权请添加作者微信（**如意**）或在 [GitHub](https://github.com/cutetailbud/ff-ruyijs) 提交 issue。
+
+第三方声明见 [`NOTICE`](NOTICE)。
+
+如果 ff-ruyijs 帮你省下了重写一个浏览器的功夫，点个 ⭐ 能让更多人发现它。
