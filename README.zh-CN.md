@@ -33,7 +33,7 @@
 
 Headless Chrome 和 Playwright 给你的是一整个浏览器：一个负责 GPU 渲染、管理窗口、吃内存的进程，而反爬厂商已经花了多年时间学习如何识别它。ruyiJS 走的是相反的路 —— 只嵌入与自动化真正相关的 Firefox 内核，其余一概不要：
 
-- **原生引擎，而非模仿。** 货真价实的 SpiderMonkey（Firefox 158）与 Necko 网络栈，会像 Firefox 一样原样执行站点的 JavaScript、challenge、签名与指纹。
+- **原生引擎，而非模仿。** 货真价实的 SpiderMonkey（Firefox 159）与 Necko 网络栈，会像 Firefox 一样原样执行站点的 JavaScript、challenge、签名与指纹。
 - **真正无头。** 没有窗口、没有布局、没有渲染器。纯 JavaScript + Web API 环境，启动快、占用低。
 - **隔离且可复现。** 每个 `Context` 都是独立进程，拥有持续保存的 JavaScript 世界与自己的代理，会话之间互不干扰。
 - **需要时可离线。** 自己提供脚本与响应，无网络也能复跑整条已捕获的流程。
@@ -93,7 +93,7 @@ with Context(proxy="http://127.0.0.1:7890") as context:
 
 ```
 Python  ──►  ruyiJS Context（独立进程）  ──►  目标站点
-                 ├─ SpiderMonkey —— Firefox 158 JS 引擎
+                 ├─ SpiderMonkey —— Firefox 159 JS 引擎
                  ├─ 38 个浏览器上下文 —— DOM · Canvas · Worker · iframe · …
                  └─ Necko —— HTTP/1.1 · 2 · 3，按上下文独立代理
 ```

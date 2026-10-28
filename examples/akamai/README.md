@@ -16,7 +16,7 @@ Akamai Bot Manager 3.x 在丽笙酒店（radissonhotels.com）上部署了两道
 3. **加密链纯算还原**（LCG + 92 字符表流替换 + 冒号洗牌 + 版本头 + BBt 耗时头）
 4. **sbsd 补环境**（503KB 宿主壳 + 120 个 signals 指纹注入）
 
-ruyijs 提供了**引擎级真实性**（真 SpiderMonkey Firefox 158 + Necko 网络栈），
+ruyijs 提供了**引擎级真实性**（真 SpiderMonkey Firefox 159 + Necko 网络栈），
 Akamai 的 sensor_data 和 sbsd 脚本在里面跑和在真 Firefox 里跑一样——**不需要碰任何一层逆向**。
 
 ## 用法

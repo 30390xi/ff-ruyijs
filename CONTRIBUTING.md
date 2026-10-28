@@ -20,7 +20,7 @@ relevant [owner record](./docs/owners) first. The essentials:
   from the main realm.
 - **One browser API domain per change.** Any new single file over 200 lines needs a short
   responsibility and split rationale in the PR description.
-- **Measure against Firefox.** Behaviour changes should cite real Firefox 158 output (for
+- **Measure against Firefox.** Behaviour changes should cite real Firefox 159 output (for
   example via `tools/firefox_parity`) and update [docs/DEVIATIONS.md](./docs/DEVIATIONS.md) when
   a difference remains.
 

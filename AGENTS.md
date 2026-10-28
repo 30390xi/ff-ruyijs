@@ -4,7 +4,7 @@
 
 ## What is ff-ruyijs?
 
-ff-ruyijs is a **headless Firefox engine for Python** — it embeds the real SpiderMonkey (Firefox 158) JavaScript engine and the Necko HTTP stack so Python code can execute any site's JavaScript, pass bot checks, and collect data without a browser window.
+ff-ruyijs is a **headless Firefox engine for Python** — it embeds the real SpiderMonkey (Firefox 159) JavaScript engine and the Necko HTTP stack so Python code can execute any site's JavaScript, pass bot checks, and collect data without a browser window.
 
 - **Repository:** https://github.com/cutetailbud/ff-ruyijs
 - **License:** Source Available — modifications must be open-sourced when distributed; commercial use requires author authorization

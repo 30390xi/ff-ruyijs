@@ -33,7 +33,7 @@ made for web scraping, JS reverse engineering, data collection, and getting past
 
 Headless Chrome and Playwright hand you a whole browser: a GPU-rendering, window-managing, memory-hungry process that anti-bot vendors have spent years learning to detect. ruyiJS takes the opposite path — it embeds only the Firefox internals that matter for automation and leaves the rest behind:
 
-- **The real engine, not an impersonation.** Genuine SpiderMonkey (Firefox 158) and the Necko network stack execute a site's JavaScript, challenges, signatures, and fingerprints exactly as Firefox would.
+- **The real engine, not an impersonation.** Genuine SpiderMonkey (Firefox 159) and the Necko network stack execute a site's JavaScript, challenges, signatures, and fingerprints exactly as Firefox would.
 - **Truly headless.** No window, no layout, no renderer. A pure JavaScript + Web API environment that starts fast and stays light.
 - **Isolated and reproducible.** Each `Context` is its own process with a persistent JavaScript world and its own proxy, so sessions never leak into each other.
 - **Offline when you need it.** Serve scripts and responses yourself and replay a whole captured flow with no network.
@@ -93,7 +93,7 @@ with Context(proxy="http://127.0.0.1:7890") as context:
 
 ```
 Python  ──►  ruyiJS Context (isolated process)  ──►  Target site
-                 ├─ SpiderMonkey — Firefox 158 JS engine
+                 ├─ SpiderMonkey — Firefox 159 JS engine
                  ├─ 38 browser contexts — DOM · Canvas · Workers · iframes · …
                  └─ Necko — HTTP/1.1 · 2 · 3, per-context proxy
 ```

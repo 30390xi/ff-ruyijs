@@ -46,7 +46,7 @@ interstitial.js 内部：
 
 | 组件 | 谁提供的 | 作用 |
 |------|----------|------|
-| SpiderMonkey (Firefox 158) | ruyijs 内置 | 执行 DataDome 全部 JS，包括 VM 字节码的 `new Function` 编译 |
+| SpiderMonkey (Firefox 159) | ruyijs 内置 | 执行 DataDome 全部 JS，包括 VM 字节码的 `new Function` 编译 |
 | Necko 网络栈 | ruyijs 内置 | 所有 HTTP/HTTPS 请求 + cookie jar 管理 |
 | 38 个浏览器 Context | ruyijs 实现 | window / document / navigator / crypto / WebGL / Canvas / PerformanceTiming 等 |
 | DataDome 代码 | 线上原样加载 | 采集、编码、VM、提交——一个字节都没改 |

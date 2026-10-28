@@ -3,9 +3,9 @@
 ## 组成与来源
 
 - **JavaScript 引擎**：`js.exe` 的引擎是 Firefox 官方的 SpiderMonkey，来自 Firefox 官方源码
-  （标签 `FIREFOX_158_0_RELEASE`）。`tools/build.py` 把 Firefox 编出的 SpiderMonkey 对象，
+  （标签 `FIREFOX_159_0_RELEASE`）。`tools/build.py` 把 Firefox 编出的 SpiderMonkey 对象，
   与本仓库 `src/` 下的 ruyijs 浏览器环境代码一起链接成 `js.exe`。
-- **网络请求库**：使用 Firefox 官方的 Necko 网络栈（Firefox 158 的 HTTP/1.1、HTTP/3、
+- **网络请求库**：使用 Firefox 官方的 Necko 网络栈（Firefox 159 的 HTTP/1.1、HTTP/3、
   brotli 原生组件）。它随运行时包发布，位于 `vendor/necko-derived`。
 - **第三方原生库**：`vendor/compression-native`（zlib-rs、brotli）、`vendor/image-native`
   （dav1d、libavif、libyuv、qcms）和 `vendor/urlpattern-native` 都取自 Firefox 官方源码树，
@@ -74,7 +74,7 @@
 ### 可选输入
 
 `--firefox-font-prefs`（`dist/bin/greprefs.js`）和 `--firefox-bindings`（`dom/bindings`）
-来自完整的 Firefox **浏览器**构建。不提供时，使用 `tools/generated/` 中已从 Firefox 158
+来自完整的 Firefox **浏览器**构建。不提供时，使用 `tools/generated/` 中已从 Firefox 159
 生成好的 `firefox_font_prefs.h` 和 `firefox_binding_order.h`，所以只需编译 SpiderMonkey。
 
 所有本机路径都通过参数或环境变量传入：
@@ -106,4 +106,4 @@
 | `compression_native.py` / `image_native.py` / `urlpattern_native.py` | 第三方原生库编译 |
 | `provenance.py` | SHA-256 与输入身份复验 |
 | `wheel_runtime.py` | `setup.py` 打包 wheel 时下载并校验 `runtime.json` 固定的运行时 |
-| `generated/` | 从 Firefox 158 浏览器构建生成的两个头文件 |
+| `generated/` | 从 Firefox 159 浏览器构建生成的两个头文件 |
