@@ -4,6 +4,7 @@
 
 ```powershell
 python .\examples\akamai\akamai.py
+python .\examples\DataDome\datadome.py
 python .\examples\creepjs\creepjs.py
 ```
 

@@ -192,6 +192,7 @@ with Context(timeout=10) as context:
 | 系统 | 类型 | 示例 |
 | :-- | :-- | :-- |
 | **Akamai Bot Manager 3.x** | sensor_data + sbsd 挑战 | `akamai` |
+| **DataDome** | interstitial device-check（plv2 + plv3） | `datadome` |
 | **CreepJS** | 指纹审计 —— 全部项目通过 | `creepjs` |
 
 > 🔒 **严禁用于任何非法用途，仅用于研究新时代 AI 浏览器。** 线上结果取决于当前网络状况与各站点的实时响应。
@@ -203,6 +204,7 @@ with Context(timeout=10) as context:
 ```sh
 python -m ruyijs.examples                      # 列出全部示例及其安装路径
 python -m ruyijs.examples akamai               # Akamai Bot Manager 3.x
+python -m ruyijs.examples datadome             # DataDome interstitial device-check
 python -m ruyijs.examples creepjs              # CreepJS 指纹审计
 ```
 

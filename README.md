@@ -192,6 +192,7 @@ Each example drives the site's own JavaScript to produce the parameters it deman
 | System | Category | Example |
 | :-- | :-- | :-- |
 | **Akamai Bot Manager 3.x** | sensor_data + sbsd challenge | `akamai` |
+| **DataDome** | Interstitial device-check (plv2 + plv3) | `datadome` |
 | **CreepJS** | Fingerprint audit — passes every section | `creepjs` |
 
 > 🔒 **Strictly prohibited for any unlawful use.** ruyiJS is provided **solely for research into a new generation of AI browsers.** Live results depend on current network conditions and each site's present responses.
@@ -203,6 +204,7 @@ Examples ship inside the package — no need to clone the repo:
 ```sh
 python -m ruyijs.examples                      # list every example and its install path
 python -m ruyijs.examples akamai               # Akamai Bot Manager 3.x
+python -m ruyijs.examples datadome             # DataDome interstitial device-check
 python -m ruyijs.examples creepjs              # CreepJS fingerprint audit
 ```
 
