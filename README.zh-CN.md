@@ -140,6 +140,12 @@ with Context() as context:
 
 页面内 `fetch` 与 XHR 走真实 HTTP/1.1、2、3，并通过按上下文隔离的代理。用 `put_resource()` 自行提供响应即可离线复跑整条已捕获的流程。用 `net_log()` 查看每一次请求。
 
+### 原生 TLS 指纹 —— 自由切换 Firefox 100 – 159
+
+网络栈使用 Firefox 自身的 **Necko + NSS**（与真实 Firefox 完全一致的 TLS 库）。TLS ClientHello 中的密码套件、扩展、ALPN、密钥共享及其排列顺序均由真实 NSS 库生成，而非模拟，基于 TLS 指纹检测的反爬系统无法区分 ruyiJS 与真实 Firefox 的流量。
+
+Necko 传输层可**自由切换 Firefox 100 – 159 的 TLS 配置**，每个版本均精确复现该版本的 ClientHello，在线上呈现不同的 JA3 / JA4 指纹——可用于轮换浏览器身份、规避按版本封禁，或测试站点对不同 Firefox 版本的反应。
+
 ```python
 with Context(proxy="http://127.0.0.1:7890", timeout=30) as context:
     context.load_page("https://example.com/", "")

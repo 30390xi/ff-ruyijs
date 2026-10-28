@@ -140,6 +140,12 @@ with Context() as context:
 
 In-page `fetch` and XHR ride real HTTP/1.1, 2, and 3, through a proxy scoped to the context. Serve responses yourself with `put_resource()` to replay an entire captured flow offline. Inspect every request with `net_log()`.
 
+### Native TLS fingerprint — switchable across Firefox 100 – 159
+
+The network stack is Firefox's own **Necko + NSS** (the same TLS library real Firefox uses). The TLS ClientHello — cipher suites, extensions, ALPN, key shares, and their ordering — is produced by the real NSS library, not an emulation, so bot-detection systems that inspect TLS cannot distinguish ruyiJS traffic from a genuine Firefox session.
+
+The Necko transport can **freely switch between Firefox 100 – 159 TLS profiles**. Each profile reproduces that version's exact ClientHello, giving you a different JA3 / JA4 fingerprint on the wire — useful for rotating browser identities, evading per-version blocks, or testing how a site reacts to different Firefox releases.
+
 ```python
 with Context(proxy="http://127.0.0.1:7890", timeout=30) as context:
     context.load_page("https://example.com/", "")
