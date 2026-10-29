@@ -1,12 +1,12 @@
 {
-  "version": "0.1.7",
-  "archive": "ruyijs-runtime-0.1.7-win-amd64.zip",
-  "sha256": "0169a895fbf13694ece8e6584ad4b83c2e3b3d98c81cb4556c8cfb7b71b02c4c",
-  "size": 41899039,
+  "version": "0.2.0",
+  "archive": "ruyijs-runtime-0.2.0-win-amd64.zip",
+  "sha256": "2919ea8a409fe7571f689f65f5a159453649eb60673f41bda8c6cadd60456a39",
+  "size": 42722486,
   "unpacked_limit": 209715200,
-  "shell_sha256": "766e374253b5b2e22e8870bf55ef52e7cafaefe41bc08da0e18f37db9347b27b",
-  "inventory_sha256": "d681d5876924cc8de4afb09bda3062a22b1c0ac097d4df4d5636e0e1312aa49f",
-  "url": "https://github.com/martinkeith700/ruyiJS/releases/download/v0.1.7/ruyijs-runtime-0.1.7-win-amd64.zip",
+  "shell_sha256": "27f3b8f5c652746f407d66d4a6cba60bf93dd53041d7e8620622ffbef28d9959",
+  "inventory_sha256": "91775945e0c19e34b6ab0369533be4137da0f744acdb69171812dbbac52619f0",
+  "url": "https://github.com/cutetailbud/ff-ruyijs/releases/download/v0.2.0/ruyijs-runtime-0.2.0-win-amd64.zip",
   "release_api": "",
   "releases_api": ""
 }

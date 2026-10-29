@@ -5,6 +5,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
+### Added
+
+- Canvas 2D draws through Firefox 159's own Skia (`gfx/skia`), set up like
+  Firefox's `DrawTargetSkia`: fills, strokes, paths, `clip`, gradients,
+  patterns, `roundRect`, `drawImage`, shadows and `fillText` / `strokeText`.
+- `Context(tls="100".."159")` selects the Firefox release whose TLS
+  ClientHello, HTTP/2 settings and HTTP/3 priorities Necko sends.
+- `DOMMatrix` / `DOMMatrixReadOnly`: every operation, `fromMatrix`,
+  `fromFloat32/64Array`, CSS transform strings, `transformPoint`, `toString`.
+
+### Fixed
+
+- `Origin` and the body `Content-Type` on fetch / XHR / `sendBeacon`;
+  `Sec-Fetch-Site` across redirects; `window.originAgentCluster`.
+- `window.event` during microtasks queued by an event listener.
+- Font fallback by language group, element `lang`, SVG presentation
+  attributes and SVG text `getBBox`; `ctx.font` read-back.
+- `python -m ruyijs.examples` lists the examples that ship; DataDome output on
+  a Chinese Windows console; the Akamai example keeps its User-Agent and TLS
+  version together (`--tls`).
+
+### Changed
+
+- The bundled runtime is rebuilt on Firefox 159 (SpiderMonkey, Necko, Skia).
+
 ## [0.1.9] - 2026-10-29
 
 ### Added
