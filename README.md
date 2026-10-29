@@ -40,7 +40,7 @@ Headless Chrome and Playwright hand you a whole browser: a GPU-rendering, window
 
 If you scrape, reverse-engineer web JavaScript, or collect data behind a challenge, it's for you. If a plain HTTP client already gets your pages, you don't need it.
 
-Runs on **Windows x64** with **Python 3.10+** (verified on Python 3.14). The wheel bundles the pinned native runtime, so there's nothing else to download.
+Windows x64 ships as a wheel with **Python 3.10+** (verified on Python 3.14). macOS arm64 is a source build; the donor layout and the surfaces that are still empty are in [docs/macos.md](docs/macos.md).
 
 ## 📦 Installation
 
@@ -50,7 +50,9 @@ python -m pip install ruyijs
 
 **Requirements:** Python 3.10+ on Windows x64 (64-bit). Verified on Python 3.10 – 3.14.
 
-The wheel ships the SHA256-pinned SpiderMonkey + Necko runtime (~42 MB). Local scripts run offline right after install — no browser download, no external dependencies.
+The Windows wheel ships the SHA256-pinned SpiderMonkey + Necko runtime (~42 MB). Local scripts run offline right after install — no browser download, no external dependencies.
+
+**macOS arm64** is not this wheel. Build it from source with Python 3.12 and two official Firefox donor trees that stay outside the repository. The verified macOS network path is HTTP/1.1 and HTTP/2. Steps and the unfinished surfaces are in [docs/macos.md](docs/macos.md).
 
 To upgrade:
 ```sh
@@ -229,7 +231,7 @@ Every example supports `--direct` (direct connection) and `--proxy http://127.0.
 
 ## 📏 Scope & limitations
 
-ruyiJS provides JavaScript execution and a broad Web API environment on **Windows x64**. It has **no browser window and no full page layout or rendering** — it is a tool for automation, analysis, and research. Use it in compliance with the terms of service of any site you interact with and with applicable law.
+ruyiJS provides JavaScript execution and a broad Web API environment on **Windows x64**, and as a source build on **macOS arm64**. It has **no browser window and no full page layout or rendering** — it is a tool for automation, analysis, and research. Use it in compliance with the terms of service of any site you interact with and with applicable law. The macOS gaps are listed in [docs/macos.md](docs/macos.md).
 
 **Related:** [**ruyiHttp**](https://gitee.com/losenine888/ruyiHttp) — a Requests-style Python HTTP library built on Firefox's native networking components.
 
@@ -238,21 +240,21 @@ ruyiJS provides JavaScript execution and a broad Web API environment on **Window
 <details>
 <summary><b>What Python versions are supported?</b></summary>
 
-Python 3.10 and above on Windows x64 (64-bit). Tested up to Python 3.14.
+Python 3.10 and above on Windows x64 (64-bit), tested up to Python 3.14. The macOS source build uses Python 3.12 for the Necko helper.
 </details>
 
 <details>
 <summary><b>Does it work on macOS or Linux?</b></summary>
 
-Not yet — currently Windows x64 only. Cross-platform support is planned.
+macOS arm64 is supported as a source build. It is not the PyPI wheel. The donor trees, helper venv, verified HTTP/1.1 and HTTP/2 path, and the surfaces that are still empty are in [docs/macos.md](docs/macos.md). Linux is not supported.
 
-The JS engine is Mozilla's official **SpiderMonkey** and the networking stack is Mozilla's official **Necko** — both are pulled directly from the Firefox source tree. You can check out and build them yourself from [mozilla-central](https://hg.mozilla.org/mozilla-central/). The customizations ruyijs makes on top do not affect the engines' core functionality, so a vanilla SpiderMonkey + Necko built for Linux or macOS will work as the foundation for a port.
+The JS engine is Mozilla's official **SpiderMonkey** and the networking stack is Mozilla's official **Necko** — both are built from the Firefox source tree and kept outside this repository.
 </details>
 
 <details>
 <summary><b>Do I need to download a browser?</b></summary>
 
-No. The wheel bundles the pinned SpiderMonkey + Necko runtime. Everything works offline right after `pip install ruyijs`.
+On Windows, no. The wheel bundles the pinned SpiderMonkey + Necko runtime, and `pip install ruyijs` runs offline. On macOS you build two Firefox donor trees beside this repository; see [docs/macos.md](docs/macos.md). The PyPI wheel is the Windows runtime.
 </details>
 
 <details>

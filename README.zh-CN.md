@@ -40,7 +40,7 @@ Headless Chrome 和 Playwright 给你的是一整个浏览器：一个负责 GPU
 
 如果你做网页抓取、逆向 Web JavaScript，或采集 challenge 背后的数据，它就适合你。如果普通 HTTP 客户端已经能拿到页面，那就不需要它。
 
-运行于 **Windows x64**，需要 **Python 3.10+**（已在 Python 3.14 下验证）。wheel 内置锁定版原生运行时，无需再下载任何东西。
+Windows x64 以 wheel 发布，需要 **Python 3.10+**（已在 Python 3.14 下验证）。macOS arm64 走源码构建；donor 布局和仍然留空的表面写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
 
 ## 📦 安装
 
@@ -50,7 +50,9 @@ python -m pip install ruyijs
 
 **系统要求：** Windows x64（64 位）+ Python 3.10+，已在 Python 3.10 – 3.14 下验证。
 
-wheel 内置 SHA256 锁定的 SpiderMonkey + Necko 运行时（约 42 MB），安装后即可离线运行，无需下载浏览器，无外部依赖。
+Windows 的 wheel 内置 SHA256 锁定的 SpiderMonkey + Necko 运行时（约 42 MB），安装后即可离线运行，无需下载浏览器，无外部依赖。
+
+**macOS arm64** 不使用这个 wheel。它用 Python 3.12 从源码构建，并依赖放在仓库外面的两份官方 Firefox donor。macOS 上验收过的网络路径是 HTTP/1.1 和 HTTP/2。步骤和未完成的表面见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
 
 升级：
 ```sh
@@ -229,7 +231,7 @@ python -m ruyijs.examples creepjs              # CreepJS 指纹审计
 
 ## 📏 使用范围与限制
 
-ruyiJS 提供 **Windows x64** 上的 JavaScript 执行及广泛的 Web API 环境，**不含浏览器窗口，也没有完整的页面布局与渲染** —— 它是面向自动化、分析与研究的工具。请在遵守目标站点服务条款与适用法律的前提下使用。
+ruyiJS 在 **Windows x64** 上提供 JavaScript 执行及广泛的 Web API 环境，**macOS arm64** 则通过源码构建提供同一外壳。它**不含浏览器窗口，也没有完整的页面布局与渲染** —— 它是面向自动化、分析与研究的工具。请在遵守目标站点服务条款与适用法律的前提下使用。macOS 上尚未补齐的表面见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
 
 **相关项目：** [**ruyiHttp**](https://gitee.com/losenine888/ruyiHttp) —— 基于 Firefox 原生网络组件的 Requests 风格 Python 请求库。
 
@@ -238,21 +240,21 @@ ruyiJS 提供 **Windows x64** 上的 JavaScript 执行及广泛的 Web API 环�
 <details>
 <summary><b>支持哪些 Python 版本？</b></summary>
 
-Windows x64（64 位）上的 Python 3.10 及以上版本，已测试至 Python 3.14。
+Windows x64（64 位）上的 Python 3.10 及以上版本，已测试至 Python 3.14。macOS 源码构建的 Necko helper 使用 Python 3.12。
 </details>
 
 <details>
 <summary><b>支持 macOS 或 Linux 吗？</b></summary>
 
-暂不支持，目前仅限 Windows x64。跨平台支持在计划中。
+macOS arm64 以源码构建支持，不走 PyPI wheel。donor 树、helper venv、已验收的 HTTP/1.1 与 HTTP/2，以及仍然留空的表面，都写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。Linux 尚未支持。
 
-JS 引擎使用的是 Mozilla 官方的 **SpiderMonkey**，网络库使用的是 Mozilla 官方的 **Necko** —— 均直接从 Firefox 源码树中抽取。你可以自行从 [mozilla-central](https://hg.mozilla.org/mozilla-central/) 拉取并编译。ruyijs 在此基础上的定制化修改不影响引擎核心功能，因此在 Linux 或 macOS 上原生编译的 SpiderMonkey + Necko 可以作为移植的基础。
+JS 引擎是 Mozilla 官方的 **SpiderMonkey**，网络库是 Mozilla 官方的 **Necko**。两者都从 Firefox 源码树编译，并且放在本仓库外面。
 </details>
 
 <details>
 <summary><b>需要下载浏览器吗？</b></summary>
 
-不需要。wheel 内置了锁定版 SpiderMonkey + Necko 运行时，`pip install ruyijs` 后即可离线运行。
+Windows 不需要。wheel 内置锁定版 SpiderMonkey + Necko 运行时，`pip install ruyijs` 后即可离线运行。macOS 需要在本仓库旁边编译两份 Firefox donor，见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。PyPI 上的 wheel 是 Windows 运行时。
 </details>
 
 <details>

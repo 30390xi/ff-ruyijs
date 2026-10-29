@@ -60,6 +60,77 @@ def local_directory(root, relative):
     return path
 
 
+def install_network_helper(root, deployed):
+    """Copy owned Necko helper sources into an existing venv.
+
+    Windows receives oneshot.py only. Darwin also receives the xpcshell
+    adapter. A missing venv is reported and does not create a release package.
+    """
+    oneshot_source = root / "src/resource_network/necko_oneshot.py"
+    venv = root / "vendor/necko-derived/python"
+    package_dirs = []
+    windows_package = venv / "Lib/site-packages/ruyijs_necko"
+    if windows_package.is_dir():
+        package_dirs.append(windows_package)
+    package_dirs += [path for path in sorted(venv.glob("lib/python*/site-packages/ruyijs_necko"))
+                     if path.is_dir()]
+    if sys.platform == "darwin":
+        for site in sorted(venv.glob("lib/python*/site-packages")):
+            if not site.is_dir():
+                continue
+            package = site / "ruyijs_necko"
+            necko_dir = site / "necko"
+            package.mkdir(exist_ok=True)
+            necko_dir.mkdir(exist_ok=True)
+            if package not in package_dirs:
+                package_dirs.append(package)
+    deployed_oneshot = None
+    for package in package_dirs:
+        if not package.is_dir():
+            continue
+        oneshot = package / "oneshot.py"
+        oneshot.write_bytes(oneshot_source.read_bytes())
+        deployed.append(oneshot)
+        deployed_oneshot = oneshot
+    report = {"source": str(oneshot_source),
+              "deployed": str(deployed_oneshot) if deployed_oneshot else None}
+    if deployed_oneshot is not None:
+        report["sha256"] = digest(deployed_oneshot)
+    if sys.platform != "darwin":
+        return report
+    sites = []
+    for package in package_dirs:
+        necko_dir = package.parent / "necko"
+        if package.is_dir() and necko_dir.is_dir():
+            sites.append((package, necko_dir))
+    if not sites:
+        report["missing"] = "helper venv"
+        print("helper venv is missing; js stays linked and no release package was created")
+        return report
+    sources = (
+        root / "src/resource_network/necko_ruyi_init.py",
+        root / "src/resource_network/necko_timing.py",
+        root / "src/resource_network/necko_client.py",
+        root / "src/resource_network/necko_adapters.py",
+        root / "src/resource_network/necko_pkg_init.py",
+    )
+    installed = []
+    for package, necko_dir in sites:
+        targets = (
+            (package / "__init__.py", sources[0]),
+            (package / "timing.py", sources[1]),
+            (necko_dir / "client.py", sources[2]),
+            (necko_dir / "adapters.py", sources[3]),
+            (necko_dir / "__init__.py", sources[4]),
+        )
+        for target, source in targets:
+            target.write_bytes(source.read_bytes())
+            deployed.append(target)
+            installed.append(target)
+    report["darwin"] = [str(path) for path in installed]
+    return report
+
+
 def main():
     args = arguments()
     root = Path(__file__).resolve().parents[1]
@@ -158,57 +229,9 @@ def main():
             report["residency"] = previous["domains"]
         if not args.pristine:
             report["client"] = build_client(native, destination)
-            # Deploy the one owned source to the existing Necko transport path.
-            # The Necko Python runtime ships with releases, not the source tree;
-            # a checkout without it still builds js.exe and skips this deploy.
-            oneshot_source = root / "src/resource_network/necko_oneshot.py"
-            package_dirs = [root / "vendor/necko-derived/python/Lib/site-packages/ruyijs_necko"]
-            package_dirs += sorted((root / "vendor/necko-derived/python").glob(
-                "lib/python*/site-packages/ruyijs_necko"))
-            deployed_oneshot = None
-            for package in package_dirs:
-                if not package.is_dir():
-                    continue
-                oneshot = package / "oneshot.py"
-                oneshot.write_bytes(oneshot_source.read_bytes())
-                deployed.append(oneshot)
-                deployed_oneshot = oneshot
-            report["networkHelper"] = {"source": str(oneshot_source),
-                                       "deployed": str(deployed_oneshot) if deployed_oneshot else None}
-            if deployed_oneshot is not None:
-                report["networkHelper"]["sha256"] = digest(deployed_oneshot)
-            if sys.platform == "darwin":
-                # The donor adapter is source, installed into an existing venv.
-                # A missing venv still leaves the linked shell; it does not
-                # invent a release package.
-                helper_sources = (
-                    root / "src/resource_network/necko_ruyi_init.py",
-                    root / "src/resource_network/necko_client.py",
-                    root / "src/resource_network/necko_adapters.py",
-                )
-                necko_dirs = []
-                for package in package_dirs:
-                    if not package.is_dir():
-                        continue
-                    necko_dir = package.parent / "necko"
-                    if necko_dir.is_dir():
-                        necko_dirs.append((package, necko_dir))
-                if not necko_dirs:
-                    report["networkHelper"]["missing"] = "helper venv"
-                    print("helper venv is missing; js stays linked and no release package was created")
-                else:
-                    installed = []
-                    for package, necko_dir in necko_dirs:
-                        targets = (
-                            (package / "__init__.py", helper_sources[0]),
-                            (necko_dir / "client.py", helper_sources[1]),
-                            (necko_dir / "adapters.py", helper_sources[2]),
-                        )
-                        for target, source in targets:
-                            target.write_bytes(source.read_bytes())
-                            deployed.append(target)
-                            installed.append(target)
-                    report["networkHelper"]["darwin"] = [str(path) for path in installed]
+            # The Necko Python runtime ships with releases, not the source tree.
+            # A checkout without the helper venv still links the shell.
+            report["networkHelper"] = install_network_helper(root, deployed)
         report["incremental"] = native.incremental
         verify_unchanged(report["inputs"], rehash=True)
         version = subprocess.run([str(executable), "--version"], cwd=destination,

@@ -12,9 +12,9 @@ ff-ruyijs is a **headless Firefox engine for Python** — it embeds the real Spi
 ## Key facts
 
 - **Language:** Python 3.10+ (user-facing), C++ (engine bindings), JavaScript (browser contexts)
-- **Platform:** Windows x64 only
+- **Platform:** Windows x64, and macOS arm64 as a source build
 - **License:** ff-ruyijs Source Available License v1.0
-- **Install:** `pip install ruyijs`
+- **Install:** `pip install ruyijs` on Windows. On macOS arm64, build `dist/js` from source. The donor layout and the empty surfaces are in `docs/macos.md`.
 - **Entry point:** `from ruyijs import Context`
 
 ## Repository layout
@@ -50,7 +50,7 @@ assets/                 README images and architecture diagrams
 - Each `Context` is an **isolated process** — no shared state between contexts.
 - Examples are run via `python -m ruyijs.examples <name>`.
 - All examples support `--proxy`, `--direct`, `--output`, `--help`.
-- The wheel bundles a SHA256-pinned native runtime; no browser download needed.
+- The Windows wheel bundles a SHA256-pinned native runtime; that wheel needs no browser download. The macOS shell is `dist/js`, built against donor trees kept outside this repository. See `docs/macos.md`.
 
 ## What NOT to do
 

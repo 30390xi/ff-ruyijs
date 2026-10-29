@@ -1,6 +1,4 @@
 #ifndef _WIN32
-// RUYIJS_POSIX_STUB
-
 #include "web_crypto/digest_backend.h"
 #include <CommonCrypto/CommonDigest.h>
 #include <cstdint>

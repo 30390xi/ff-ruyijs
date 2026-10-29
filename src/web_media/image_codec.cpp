@@ -1,4 +1,3 @@
-// RUYIJS_POSIX_STUB
 // Operating-system codec adapter. The domain sees encoded bytes and real pixels.
 #include "web_media/image_wic.h"
 #include "web_media/image_animation.h"
