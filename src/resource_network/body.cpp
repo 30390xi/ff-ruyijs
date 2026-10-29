@@ -10,6 +10,8 @@
 #include <cstring>
 
 #include "resource_network/state.h"
+#include "web_platform/request_body.h"
+#include "domain/resource_network/header_rules.h"
 #include "runtime/page_helpers.h"
 #include "jsfriendapi.h"
 #include "js/ArrayBuffer.h"
@@ -114,33 +116,30 @@ const char* BodyInterface(const JS::CallArgs& args) {
   return js::GetFunctionNativeReserved(&args.callee(), 1).toInt32() ? "Response" : "Request";
 }
 
+// Fetch "extract a body": bytes plus the type a Request/Response adds as
+// Content-Type. Strings and URLSearchParams stay text; Blob, FormData and
+// buffers are bytes. Anything else is stringified as USVString.
 bool BodyInput(State& state, JS::HandleValue value, BodyRecord* body) {
   if (value.isUndefined() || value.isNull()) return true;
   body->nullBody = false;
-  if (value.isObject() && JS::IsArrayBufferObject(&value.toObject())) {
-    size_t length = 0;
-    bool shared = false;
-    uint8_t* data = nullptr;
-    JS::GetArrayBufferLengthAndData(&value.toObject(), &length, &shared, &data);
-    body->kind = BodyKind::Bytes;
-    body->bytes.assign(reinterpret_cast<const char*>(data), length);
-    return true;
-  }
-  if (value.isObject() && JS_IsArrayBufferViewObject(&value.toObject())) {
-    JSObject* view = &value.toObject();
-    size_t elements = 0;
-    bool shared = false;
-    uint8_t* data = nullptr;
-    js::GetArrayBufferViewLengthAndData(view, &elements, &shared, &data);
-    (void)elements;
-    (void)shared;
-    body->kind = BodyKind::Bytes;
-    body->bytes.assign(reinterpret_cast<const char*>(data),
-                       JS_GetArrayBufferViewByteLength(view));
-    return true;
-  }
-  body->kind = BodyKind::Text;
-  return EncodeBodyText(state.cx, value, &body->bytes);
+  web_platform::RequestBody extracted;
+  extracted.limit = Limits::body_bytes;
+  if (!web_platform::ReadRequestBody(state.cx, value, &extracted)) return false;
+  if (extracted.tooLarge) return Error(state.cx, "Request body exceeds product limit", true);
+  body->bytes = std::move(extracted.bytes);
+  body->contentType = std::move(extracted.contentType);
+  const bool text = value.isString() || !value.isObject() ||
+      body->contentType.rfind("text/plain", 0) == 0 ||
+      body->contentType.rfind("application/x-www-form-urlencoded", 0) == 0;
+  body->kind = text ? BodyKind::Text : BodyKind::Bytes;
+  return true;
+}
+// A body type joins the header list only when the caller supplied no Content-Type.
+void AddBodyContentType(const BodyRecord& body, HeaderPairs* headers) {
+  if (body.nullBody || body.contentType.empty()) return;
+  for (const auto& field : *headers)
+    if (ruyijs::domain::resource_network::lower_header_name(field.first) == "content-type") return;
+  headers->emplace_back("content-type", body.contentType);
 }
 
 bool InstallBody(State& state, PageHelpers& helpers, const char* iface, JS::HandleObject prototype) {

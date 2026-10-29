@@ -224,6 +224,7 @@ bool PageLoad::Commit(uint64_t ticket) {
   owners.document.SetDocumentReferrer(http.referrer);
   // The secure-context surface follows the committed document URL.
   if (!ConfigureSecureExposure(*next)) return false;
+  if (!owners.environment.CommitAgentCluster(AgentClusterHeader(http))) return false;
   JS::RootedString markup(cx_, JS_NewStringCopyUTF8N(cx_, JS::UTF8Chars(body.data(), body.size())));
   if (!markup) return false;
   JS::RootedValue ignored(cx_);

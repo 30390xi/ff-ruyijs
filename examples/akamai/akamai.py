@@ -2,7 +2,7 @@
 
 Architecture
 ============
-ruyijs provides a real Firefox 158 environment (SpiderMonkey + Necko).
+ruyijs provides a real Firefox 159 environment (SpiderMonkey + Necko).
 The Akamai JS runs natively — no deobfuscation, no algorithm reimplementation,
 no environment patching needed.
 
@@ -44,7 +44,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 DEFAULT_URL = "https://www.radissonhotels.com/zh-cn/"
 
-# Firefox 158 on Windows 10 — full validated profile
+# Firefox on Windows 10 — full validated profile (version follows --tls)
 PROFILE = {
     "navigator": {
         "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0",
@@ -216,7 +216,7 @@ def run(args, report):
     deadline = monotonic() + args.timeout
     proxy = report["proxy"] if report["proxy"] != "direct" else None
 
-    with Context(proxy=proxy, timeout=30) as ctx:
+    with Context(proxy=proxy, timeout=30, tls=args.tls) as ctx:
         script_errors = report["scriptErrors"]
 
         def tl():
@@ -274,9 +274,13 @@ def run(args, report):
         # ==============================================================
         # 1. Configure
         # ==============================================================
-        log("Configuring Firefox 158 environment...")
+        log(f"Configuring Firefox {args.tls} environment (UA + TLS)...")
         ctx.configure_clock("system")
         profile = json.loads(json.dumps(PROFILE))
+        # The User-Agent agrees with the TLS ClientHello Necko sends.
+        profile["navigator"]["userAgent"] = (
+            f"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:{args.tls}.0) "
+            f"Gecko/20100101 Firefox/{args.tls}.0")
         try:
             ctx.configure_fingerprint(profile)
             log("  Profile applied", gpu="RTX 3080", lang="zh-CN", screen="1920x1080")
@@ -497,6 +501,8 @@ def main():
     parser.add_argument("--timeout", type=float, default=180, help="Overall timeout (s)")
     parser.add_argument("--output", "-o", type=Path, help="JSON report file")
     parser.add_argument("--test-api", action="store_true", help="Test business API")
+    parser.add_argument("--tls", default="159",
+                        help="Firefox version (100-159) for the TLS ClientHello and the User-Agent")
     px = parser.add_mutually_exclusive_group()
     px.add_argument("--proxy", help="HTTP(S) proxy")
     px.add_argument("--direct", action="store_true", help="Direct (no proxy)")
@@ -505,14 +511,14 @@ def main():
     proxy = None if args.direct else (args.proxy or auto_proxy())
     report = {
         "status": "error", "target": args.url,
-        "transport": "ruyijs-spidermonkey158+necko",
+        "transport": f"ruyijs-spidermonkey159+necko(tls={args.tls})",
         "proxy": proxy or "direct",
         "passed": False, "scriptErrors": [], "method": None,
     }
 
     t0 = monotonic()
     log("=" * 60)
-    log("Akamai BM 3.x — ruyijs (SpiderMonkey 158 + Necko)")
+    log(f"Akamai BM 3.x — ruyijs (SpiderMonkey 159 + Necko, Firefox {args.tls} TLS/UA)")
     log(f"Target: {args.url}")
     log(f"Proxy:  {report['proxy']}")
     log("=" * 60)

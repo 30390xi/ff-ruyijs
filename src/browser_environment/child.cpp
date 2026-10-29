@@ -13,6 +13,9 @@ Environment::Environment(JSContext* cx, JS::HandleObject page, Environment& pare
   state_->topWindow = owner->topWindow;
   state_->parentWindow = owner->page;
   state_->frameElement = frameElement;
+  state_->agentClusters = owner->agentClusters;
+  // The initial about:blank document has its creator's origin and agent.
+  state_->originKeyed = owner->originKeyed;
 }
 // A later top-level document of the same traversable: a new Window over the
 // first document's Model. The buffered profile groups are plain data the
@@ -27,6 +30,28 @@ Environment::Environment(JSContext* cx, JS::HandleObject page, Environment& prev
   state_->permissionsGroup = old.permissionsGroup.get();
   state_->geolocationGroup = old.geolocationGroup.get();
   state_->speechGroup = old.speechGroup.get();
+  state_->agentClusters = old.agentClusters;
+}
+// HTML "obtain a similar-origin window agent": an origin already in the
+// group's map keeps its key; otherwise a secure document whose response
+// carries the structured-field boolean ?1 makes its origin origin-keyed.
+// An opaque origin is always origin-keyed.
+bool Environment::CommitAgentCluster(const std::string& header) {
+  OriginValue value;
+  bool secure = false;
+  if (!state_->ReadOriginValue(&value) || !state_->ReadSecureContext(&secure)) return false;
+  if (value.kind == domain::browser_environment::OriginKind::Opaque) { state_->originKeyed = true; return true; }
+  const std::string origin = value.tuple;
+  auto& map = *state_->agentClusters;
+  const auto found = map.find(origin);
+  if (found != map.end()) { state_->originKeyed = found->second; return true; }
+  size_t begin = 0, end = header.size();
+  while (begin < end && (header[begin] == ' ' || header[begin] == '\t')) ++begin;
+  while (end > begin && (header[end - 1] == ' ' || header[end - 1] == '\t')) --end;
+  const bool requested = secure && header.compare(begin, end - begin, "?1") == 0;
+  map.emplace(origin, requested);
+  state_->originKeyed = requested;
+  return true;
 }
 // The child realm (or a later top-level document) builds its own frozen
 // languages array and applies the same locale and timezone to its Intl/Date;

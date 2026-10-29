@@ -2,6 +2,7 @@
 #include "resource_network/request.h"
 #include "resource_network/state.h"
 #include "domain/browser_environment/url_value.h"
+#include "domain/resource_network/header_rules.h"
 #include <cctype>
 
 namespace ruyijs::resource_network {
@@ -62,6 +63,13 @@ bool ApplyRequestInit(State& state, const RequestInitFields& init, RequestDraft*
   if(!v.nullBody){d.body=v.body;d.kind=v.kind;d.nullBody=false;}
   if(!d.nullBody&&(d.method=="GET"||d.method=="HEAD"))
     return Error(state.cx,"Request with GET or HEAD method cannot have a body");
+  // Fetch Request constructor step 36: the init body's type becomes Content-Type
+  // unless the header list already has one.
+  if(!v.nullBody&&!v.bodyType.empty()){
+    bool has=false;
+    for(const auto& h:d.headers)has=has||ruyijs::domain::resource_network::lower_header_name(h.first)=="content-type";
+    if(!has)d.headers.emplace_back("content-type",v.bodyType);
+  }
   return true;
 }
 }

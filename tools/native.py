@@ -100,7 +100,10 @@ class Native:
 
     def compile(self, source, name, exceptions=False):
         output = self.directory / f"{name}.obj"
-        if name == "geometry_harfbuzz":
+        if name == "web_canvas_skia_target":
+            import skia_native
+            flags = skia_native.compile_flags(self.donor, self.root, self.directory)
+        elif name == "geometry_harfbuzz":
             from geometry_fonts import FLAGS
             flags = ["-std:c++20", "-MD", "-O2", "-EHsc", "-DNDEBUG", *FLAGS,
                      "-I" + str(self.donor.src / "gfx/harfbuzz/src")]

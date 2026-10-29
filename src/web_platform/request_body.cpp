@@ -20,12 +20,12 @@ bool Copy(JSContext* cx, JS::HandleObject object, RequestBody* out) {
   bool shared = false;
   if (view) buffer = JS_GetArrayBufferViewBuffer(cx, object, &shared);
   if (!buffer) return false;
-  if (shared) return WebKit::Fail(cx, "sendBeacon body requires a non-shared buffer");
+  if (shared) return WebKit::Fail(cx, "Request body requires a non-shared buffer");
   // Firefox admits detached BufferSource values as an empty body.
   if (JS::IsDetachedArrayBufferObject(buffer)) return true;
   size_t length = view ? JS_GetArrayBufferViewByteLength(object)
                        : JS::GetArrayBufferByteLength(buffer);
-  if (length > kRequestBodyLimit) { out->tooLarge = true; return true; }
+  if (length > out->limit) { out->tooLarge = true; return true; }
   JS::AutoCheckCannotGC nogc;
   const auto* data = static_cast<const char*>(view
       ? JS_GetArrayBufferViewData(object, &shared, nogc)
@@ -35,7 +35,9 @@ bool Copy(JSContext* cx, JS::HandleObject object, RequestBody* out) {
 }
 }
 bool ReadRequestBody(JSContext* cx, JS::HandleValue value, RequestBody* out) {
+  const size_t limit = out->limit;
   *out = {};
+  out->limit = limit;
   if (value.isNullOrUndefined()) return true;
   if (value.isObject()) {
     JS::RootedObject self(cx, js::CheckedUnwrapStatic(&value.toObject()));
@@ -48,7 +50,7 @@ bool ReadRequestBody(JSContext* cx, JS::HandleValue value, RequestBody* out) {
         const uint8_t* data = nullptr;
         size_t length = 0;
         if (!BlobBytes(cx, self, &data, &length)) return false;
-        if (length > kRequestBodyLimit) { out->tooLarge = true; return true; }
+        if (length > out->limit) { out->tooLarge = true; return true; }
         if (length) out->bytes.assign(reinterpret_cast<const char*>(data), length);
         return true;
       }
@@ -56,7 +58,7 @@ bool ReadRequestBody(JSContext* cx, JS::HandleValue value, RequestBody* out) {
         std::vector<std::pair<std::string, std::string>> entries;
         if (!ParamsEntries(cx, self, &entries)) return false;
         out->bytes = SerializeFormQuery(entries);
-        out->tooLarge = out->bytes.size() > kRequestBodyLimit;
+        out->tooLarge = out->bytes.size() > out->limit;
         out->contentType = "application/x-www-form-urlencoded;charset=UTF-8";
         return true;
       }
@@ -66,7 +68,7 @@ bool ReadRequestBody(JSContext* cx, JS::HandleValue value, RequestBody* out) {
     }
   }
   if (!ReadRequestText(cx, value, &out->bytes)) return false;
-  out->tooLarge = out->bytes.size() > kRequestBodyLimit;
+  out->tooLarge = out->bytes.size() > out->limit;
   out->contentType = "text/plain;charset=UTF-8";
   return true;
 }

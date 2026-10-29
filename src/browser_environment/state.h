@@ -10,6 +10,8 @@
 #include "domain/browser_environment/user_activation.h"
 #include "jsapi.h"
 #include <memory>
+#include <map>
+#include <string>
 #include "js/GCVector.h"
 #include "js/GlobalObject.h"
 
@@ -38,6 +40,14 @@ struct State final {
   // An iframe context reads Navigator, Screen, History and locale from the
   // parent's context-scoped state; its about:blank Location is its own.
   State* shared = nullptr;
+  // HTML "historical agent cluster key map" of the browsing context group: the
+  // first document of an origin decides, from its Origin-Agent-Cluster response
+  // header, whether that origin is origin-keyed; later same-origin documents of
+  // the group keep the decision. One map per group, shared by the top-level
+  // successor documents and every frame.
+  std::shared_ptr<std::map<std::string, bool>> agentClusters = std::make_shared<std::map<std::string, bool>>();
+  // This document's own answer (window.originAgentCluster).
+  bool originKeyed = false;
   // Runtime document state; never delegated through shared or fingerprint Model.
   domain::browser_environment::UserActivation activation;
   double (*activationClock)(void*) = nullptr;

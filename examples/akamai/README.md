@@ -26,6 +26,7 @@ python akamai.py
 python akamai.py --proxy http://127.0.0.1:7890
 python akamai.py --direct --output result.json
 python akamai.py --direct --timeout 120
+python akamai.py --tls 120          # Firefox 120 的 TLS ClientHello 与 User-Agent（100-159，默认 159）
 ```
 
 ## 流程

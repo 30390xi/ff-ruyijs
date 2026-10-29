@@ -70,7 +70,11 @@ bool PathExtra(JSContext* cx, unsigned argc, JS::Value* vp) {
     if (argc < 5) return WebKit::Fail(cx, "arcTo requires five arguments");
     double values[5]; bool usable;
     if (!detail::ReadNumbers(cx, args, 0, 5, values, &usable)) return false;
-    return !usable || values[4] >= 0 || ThrowDOMException(s, "IndexSizeError", "Negative radius");
+    if (!usable) return true;
+    if (values[4] < 0) return ThrowDOMException(s, "IndexSizeError", "Negative radius");
+    // Replayed by the Skia path builder as CanvasPath::ArcTo (opcode 10).
+    const double command[6] = {10.0, values[0], values[1], values[2], values[3], values[4]};
+    return AppendCanvasPath(cx, self, command, 6);
   }
   JS::RootedObject source(cx);
   if (!WebKit::Check(cx, args.get(0), &kPath2DClass, &source, "addPath requires a Path2D")) return false;

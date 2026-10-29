@@ -54,6 +54,8 @@ bool CreateResponse(State& state, const JS::CallArgs& args, int32_t forced_statu
     }
     if (!source && (!JS_GetProperty(cx,init,"headers",&value) || !HeaderPairsArgument(cx,value,&headers))) return false;
   }
+  // Fetch "initialize a response" step 6.3: the extracted body type becomes Content-Type.
+  if (!source && !body_text) AddBodyContentType(*body, &headers);
   if (source && (status<200 || status>599)) return Error(cx,"Response constructor: Invalid response status code.",true);
   if (!source && status==0) status=200;
   if (!body->nullBody && (status == 204 || status == 205 || status == 304))

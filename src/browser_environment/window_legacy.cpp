@@ -131,7 +131,8 @@ bool LegacyGetter(JSContext* cx, unsigned argc, JS::Value* vp) {
       return JS_WrapValue(cx, args.rval());
     case mScrollMaxX: return ScrollMax(w, false, args.rval());
     case mScrollMaxY: return ScrollMax(w, true, args.rval());
-    case mFullScreen: case mOriginAgentCluster: args.rval().setBoolean(false); return true;
+    case mFullScreen: args.rval().setBoolean(false); return true;
+    case mOriginAgentCluster: args.rval().setBoolean(w.env.originKeyed); return true;
     case mInstallTrigger: args.rval().setNull(); return true;
     default:
       args.rval().setObject(*w.pipInstance);

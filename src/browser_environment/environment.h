@@ -181,6 +181,10 @@ class Environment final {
   // it loads again; the top-level Navigate/CommitNavigation stay the paths
   // that also write the profile model and the session history.
   bool SetFrameLocation(const std::string& url);
+  // Commits the document's agent cluster (window.originAgentCluster) after its
+  // URL committed: `header` is its Origin-Agent-Cluster response field ("" when
+  // absent), honoured only in a secure context.
+  bool CommitAgentCluster(const std::string& header);
  private:
   State* state_;
 };

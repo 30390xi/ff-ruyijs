@@ -4,6 +4,7 @@
 // The runs still come from the one shaping owner, so fonts are selected and
 // advanced exactly like every other measurement in this domain.
 #include "web_geometry/font_backend.h"
+#include "web_geometry/script_runs.h"
 #include <algorithm>
 #include <cmath>
 
@@ -56,6 +57,7 @@ bool SystemFonts::MeasureCanvas(const std::u16string& text, const FontInput& inp
   if (!CanvasFontBaselines(primary, input, result)) return false;
   int64_t total = 0;
   InkRect ink;
+  const std::vector<bool> cjk = CJKRunUnits(text);
   for (size_t start = 0; start < text.size();) {
     size_t end = start;
     const uint32_t first = Codepoint(text, &end);
@@ -65,6 +67,7 @@ bool SystemFonts::MeasureCanvas(const std::u16string& text, const FontInput& inp
     if (!collection_->Select(input, first, &font, &missing) &&
         (!missing || !collection_->Select(input, 0x20, &font))) return false;
     while (!missing && end < text.size()) {
+      if (cjk[end] != cjk[start]) break;
       size_t next = end;
       const uint32_t code = Codepoint(text, &next);
       if (!Continuation(code)) {
@@ -86,6 +89,16 @@ bool SystemFonts::MeasureCanvas(const std::u16string& text, const FontInput& inp
     if (missing ? !MissingFontRun(font, local, first, end - start, &run)
                 : !ShapeFont(font, local, text.substr(start, end - start), &run)) return false;
     InkRect positioned = run.ink;
+    if (font.syntheticItalic && !missing) {
+      // gfxFont::Measure: a fake-italic run's box grows by the skew of its
+      // bottom (left) and top (right) edges, rounded up in app units.
+      static const float kTanDefaultAngle = float(std::tan(14.0 * (2.0 * 3.14159265358979323846 / 360.0)));
+      const double skew = kTanDefaultAngle;
+      const double extendLeft = std::ceil(skew * positioned.y_most());
+      const double extendRight = std::ceil(skew * -positioned.y);
+      positioned.width = positioned.width + extendLeft + extendRight;
+      positioned.x -= extendLeft;
+    }
     positioned.x += double(total);  // the run starts at the accumulated advance
     ink.Union(positioned);
     total += run.advance;

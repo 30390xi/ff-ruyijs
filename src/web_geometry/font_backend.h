@@ -85,6 +85,14 @@ struct FontRun {
   int advance = 0;
 };
 std::vector<std::wstring> FontFamilies(const FontInput&);
+// nsFontMetrics::MaxDescent in device pixels: ComputeMaxDescent over the
+// sanitized underline (gfxFont::SanitizeMetrics) and the rounded descent.
+double FrameMaxDescent(const DWRITE_FONT_METRICS& metrics, double conv, double maxAscent,
+                       double maxDescent, IDWriteFontFace* face = nullptr, double size = 0);
+// font_preferences.cpp: gfxFontGroup::WhichPrefFontSupportsChar's families
+// for a character, and the emoji preference list.
+std::vector<std::wstring> PrefFallbackFamilies(uint32_t codepoint, const FontInput&);
+std::vector<std::wstring> EmojiFallbackFamilies();
 bool ShapeFont(const SelectedFont&, const FontInput&, const std::u16string&, FontRun*);
 bool CanvasFontBaselines(const SelectedFont&, const FontInput&, CanvasTextMetrics*);
 bool MissingFontRun(const SelectedFont&, const FontInput&, uint32_t codepoint,

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <vector>
 #include "js/Conversions.h"
 #include "js/Object.h"
 #include "js/PropertyAndElement.h"
@@ -108,6 +109,17 @@ struct CanvasFont {
   bool valid = false;
 };
 bool ParseCanvasFont(const std::string& shorthand, CanvasFont* out);
+}  // namespace ruyijs::web_canvas::detail
+namespace ruyijs::web_geometry { struct CanvasGlyphRun; }
+namespace ruyijs::web_canvas {
+bool CanvasTextRuns(State&, JS::HandleObject, const std::u16string&, double x, double y,
+                    double maxWidth, std::vector<web_geometry::CanvasGlyphRun>*, double matrix[6],
+                    float* size, bool* draw, double ink[4] = nullptr, bool* hasInk = nullptr);
+}  // namespace ruyijs::web_canvas
+namespace ruyijs::web_canvas::detail {
+// font_serialize.cpp: the value ctx.font reads back after SetFont, or false
+// when Firefox would reject the string.
+bool CanonicalCanvasFont(const std::string& input, std::string* out);
 // text_metrics.cpp: the realm's font owner (web_geometry), created on first use.
 // It caches the system font collection only; nothing page-specific is stored.
 web_geometry::SystemFonts& Fonts(State& state);
@@ -227,5 +239,13 @@ inline bool CanvasDimensions(State& state, JS::HandleObject element, uint32_t* w
 // A 2D context back to its default drawing state, empty state stack and path;
 // CanvasRenderingContext2D.reset() and a dimension change share it.
 bool ResetContext2D(State& state, JS::HandleObject context);
+// A CanvasImageSource as the SourceSurface Firefox draws: a canvas snapshot,
+// an ImageBitmap or a decoded image, premultiplied RGBA (context2d_extra.cpp).
+struct SourcePixels {
+  uint32_t width = 0, height = 0;
+  std::vector<uint8_t> bytes;
+  bool opaque = false;  // a decoded image without alpha (B8G8R8X8)
+};
+bool ReadImagePixels(State& state, JS::HandleValue value, SourcePixels* out);
 }  // namespace ruyijs::web_canvas::detail
 #endif

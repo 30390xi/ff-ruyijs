@@ -95,6 +95,7 @@ with Context(proxy="http://127.0.0.1:7890") as context:
 Python  ──►  ruyiJS Context (isolated process)  ──►  Target site
                  ├─ SpiderMonkey — Firefox 159 JS engine
                  ├─ 38 browser contexts — DOM · Canvas · Workers · iframes · …
+                 ├─ Skia — Firefox 159 2D graphics behind Canvas
                  └─ Necko — HTTP/1.1 · 2 · 3, per-context proxy
 ```
 
@@ -146,13 +147,19 @@ The network stack is Firefox's own **Necko + NSS** (the same TLS library real Fi
 
 The Necko transport can **freely switch between Firefox 100 – 159 TLS profiles**. Each profile reproduces that version's exact ClientHello, giving you a different JA3 / JA4 fingerprint on the wire — useful for rotating browser identities, evading per-version blocks, or testing how a site reacts to different Firefox releases.
 
+Choose the release per context with `tls=` (`"100"`–`"159"`; default 159). It sets the TLS ClientHello, HTTP/2 settings and HTTP/3 priorities of that context's Necko transport only; set a matching user agent with `configure_fingerprint` when the page should agree.
+
 ```python
-with Context(proxy="http://127.0.0.1:7890", timeout=30) as context:
+with Context(proxy="http://127.0.0.1:7890", timeout=30, tls="120") as context:
     context.load_page("https://example.com/", "")
     context.eval("globalThis.r = null; fetch('/api').then(x => x.json()).then(v => r = v)")
     context.advance(25)               # drive the event loop until it settles
     print(context.eval("r"))
 ```
+
+### Canvas on Firefox's native Skia
+
+Canvas 2D draws through Firefox's own official **Skia** (`gfx/skia` from the Firefox 159 release), not a re-implementation.
 
 ### Python ↔ JavaScript bridge
 

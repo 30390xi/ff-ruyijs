@@ -87,6 +87,10 @@ def serve(adapter, method, url, headers, body):
     for name, value in headers:
         fields[name] = fields[name] + ", " + value if name in fields else value
     prepared = Request(method, url, headers=fields, data=body or None).prepare()
+    # The page side frames the body exactly as Firefox does; requests' own
+    # "Content-Length: 0" for a bodiless non-GET (a CORS preflight) is not sent.
+    if "Content-Length" not in fields and not body:
+        prepared.headers.pop("Content-Length", None)
     control = RequestControl(BUDGET, max_attempts=ATTEMPTS)
     reader = open_response(adapter, prepared, control,
                            timeout=(BUDGET, READ), verify=True, proxies=transport_proxies())

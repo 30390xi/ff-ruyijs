@@ -5,30 +5,18 @@ import sys
 
 
 EXAMPLES = {
-    "google": ("google/google_search.py", "Google 搜索"),
-    "boss": ("boss/boss.py", "BOSS 职位"),
-    "fangdi": ("网上房地产-瑞数6/fangdi.py", "网上房地产（瑞数 6）"),
-    "cebwm": ("光大理财-瑞数定制/cebwm.py", "光大理财（瑞数定制）"),
-    "toutiao": ("今日头条/toutiao.py", "今日头条"),
-    "douyin": ("抖音/douyin.py", "抖音精选视频流"),
-    "xhs": ("xhs/xhs.py", "小红书 rednote 推荐流"),
-    "geetest": ("极验/geetest_fullpage.py", "极验"),
-    "yidun": ("网易易盾/yidun.py", "网易易盾"),
-    "shumei": ("数美/shumei.py", "数美"),
-    "tianyu": ("腾讯天御/tianyu.py", "腾讯天御"),
-    "creepjs": ("creepjs/creepjs.py", "CreepJS"),
     "akamai": ("akamai/akamai.py", "Akamai Bot Manager 3.x"),
-    "ali234": ("阿里234/taobao_bxua.py", "阿里 234 / 淘宝 bx-ua"),
+    "datadome": ("DataDome/datadome.py", "DataDome 设备检测"),
+    "creepjs": ("creepjs/creepjs.py", "CreepJS"),
 }
 
 
 def _root():
     # Installed layout: examples sit next to this file (ruyijs/examples/<name>).
     # Source tree: this file is python/ruyijs/examples/__main__.py and the
-    # examples live at <repo>/examples. google ships in the package but is not
-    # copied into the source-tree python/ruyijs/examples, so it tells them apart.
+    # examples live at <repo>/examples; the source tree has no copies here.
     local = Path(__file__).resolve().parent
-    if (local / "google/google_search.py").is_file():
+    if (local / "akamai/akamai.py").is_file():
         return local
     return Path(__file__).resolve().parents[3] / "examples"
 

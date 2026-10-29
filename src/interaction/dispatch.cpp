@@ -28,12 +28,15 @@ void State::invoke(std::shared_ptr<Listener> listener, domain::DomEvent& value, 
   const JS::Value* previous = currentEvent;
   currentEvent = argument.address();
   if (ok) ok = JS::Call(cx, receiver, function, JS::HandleValueArray(argument), &result);
-  currentEvent = previous;
   if (!ok) {
     CaptureOperationFailure(cx);
     JS_ClearPendingException(cx);
   }
+  // Firefox runs the callback's microtask checkpoint (CallSetup teardown)
+  // before EventListenerManager restores window.event, so promise jobs queued
+  // by the listener still observe this event.
   if (microtaskCheckpoint && !JS::DescribeScriptedCaller(nullptr, cx)) microtaskCheckpoint(microtaskContext);
+  currentEvent = previous;
 }
 void Realm::SetMicrotaskCheckpointPort(void (*port)(void*), void* context) {
   state_->microtaskCheckpoint = port;

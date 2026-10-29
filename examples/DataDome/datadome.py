@@ -61,6 +61,9 @@ def auto_proxy():
 
 
 def main():
+    # A Chinese Windows console defaults to GBK; the help and log lines are UTF-8.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     proxy_group = parser.add_mutually_exclusive_group()
     proxy_group.add_argument("--proxy", help="HTTP(S) 代理；默认自动检测")

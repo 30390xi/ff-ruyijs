@@ -82,7 +82,9 @@ bool NormalizeStyle(JSContext* cx, JS::MutableHandleValue value, bool* accepted)
 
 // True when the value is one this attribute accepts; an unaccepted value is
 // ignored (the attribute keeps its current value) exactly like the specification.
-bool Accepts(JSContext* cx, const FieldSpec& spec, JS::HandleValue value, bool* accepted) {
+// *numeric receives the converted number of a numeric attribute.
+bool Accepts(JSContext* cx, const FieldSpec& spec, JS::HandleValue value, bool* accepted,
+             double* numeric) {
   *accepted = false;
   if (spec.kind == kAnyString) {
     if (value.isString()) *accepted = true;
@@ -109,6 +111,7 @@ bool Accepts(JSContext* cx, const FieldSpec& spec, JS::HandleValue value, bool* 
   double number = 0.0;
   if (!JS::ToNumber(cx, value, &number)) return false;
   if (!std::isfinite(number)) return true;
+  *numeric = number;
   switch (spec.kind) {
     case kPositive: *accepted = number > 0.0; break;
     case kNonNegative: *accepted = number >= 0.0; break;
@@ -142,9 +145,27 @@ bool Context2DStateSet(JSContext* cx, unsigned argc, JS::Value* vp) {
     if (!text) return false;
     value.setString(text);
   }
+  if (spec.field == kFont) {
+    // SetFont: the CSS font shorthand, re-serialized; an invalid value is ignored.
+    JS::RootedString text(cx, JS::ToString(cx, value));
+    if (!text) return false;
+    JS::UniqueChars utf8 = JS_EncodeStringToUTF8(cx, text);
+    if (!utf8) return false;
+    std::string canonical;
+    if (!detail::CanonicalCanvasFont(utf8.get(), &canonical)) return true;
+    JS::RootedString stored(cx, JS_NewStringCopyUTF8Z(cx, JS::ConstUTF8CharsZ(canonical.c_str(), canonical.size())));
+    if (!stored) return false;
+    value.setString(stored);
+  }
   bool accepted = false;
-  if (!Accepts(cx, spec, value, &accepted)) return false;
+  double number = 0.0;
+  if (!Accepts(cx, spec, value, &accepted, &number)) return false;
   if (!accepted) return true;
+  // Every numeric 2D attribute (lineWidth, miterLimit, lineDashOffset,
+  // globalAlpha, shadowBlur, shadowOffsetX/Y) is a gfx::Float in ContextState.
+  if (spec.kind == kPositive || spec.kind == kNonNegative || spec.kind == kAlpha ||
+      spec.kind == kNumber)
+    value.setNumber(double(float(number)));
   if (spec.field == kFillStyle || spec.field == kStrokeStyle) {
     if (!NormalizeStyle(cx, &value, &accepted)) return false;
     if (!accepted) return true;

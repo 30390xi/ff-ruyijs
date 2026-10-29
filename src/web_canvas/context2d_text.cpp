@@ -81,12 +81,17 @@ bool FillCanvasText(State& state, JS::HandleObject context, const std::u16string
   const bool start = align == "start" || align.empty();
   const bool right = align == "right" || (start && rtl) || (align == "end" && !rtl);
   const bool center = align == "center";
-  const double origin_x = x - (center ? metrics.width * .5 : right ? metrics.width : 0.0);
-  const double ascent = metrics.font_ascent, descent = metrics.font_descent;
-  if (baseline == "top") y += ascent;
-  else if (baseline == "hanging") y += metrics.em_ascent;
-  else if (baseline == "middle") y += (ascent - descent) * .5;
-  else if (baseline == "bottom" || baseline == "ideographic") y -= descent;
+  // processor.mPt.x -= offsetX, offsetX a float of anchorX * totalWidth.
+  const float offset_x = center ? float(.5 * metrics.width) : right ? metrics.width : 0.0f;
+  const double origin_x = x - double(offset_x);
+  // CanvasRenderingContext2D::DrawOrMeasureText: mPt.y += baselineAnchor.
+  double anchor = metrics.alphabetic_baseline;
+  if (baseline == "top") anchor = metrics.em_ascent;
+  else if (baseline == "hanging") anchor = metrics.hanging_baseline;
+  else if (baseline == "middle") anchor = (metrics.em_ascent - metrics.em_descent) * .5;
+  else if (baseline == "ideographic") anchor = metrics.ideographic_baseline;
+  else if (baseline == "bottom") anchor = -metrics.em_descent;
+  y += anchor;
 
   input.x = origin_x;
   input.y = y;
@@ -135,6 +140,67 @@ bool FillCanvasText(State& state, JS::HandleObject context, const std::u16string
     // transparent makes gfxTextRun::Draw buffer the run and blend it back.
     raster::DrawColorGlyph(surface, mask, text_matrix, global, straight[3] ? straight[3] : 255);
   }
+  return true;
+}
+// The glyph runs and text matrix fillText would draw, for strokeText: the
+// same font, alignment, baseline and maxWidth squeeze.
+bool CanvasTextRuns(State& state, JS::HandleObject context, const std::u16string& text, double x,
+                    double y, double max_width, std::vector<web_geometry::CanvasGlyphRun>* runs,
+                    double matrix_out[6], float* size, bool* draw, double ink[4], bool* hasInk) {
+  *draw = false;
+  if (text.empty() || !std::isfinite(x) || !std::isfinite(y)) return true;
+  if (std::isfinite(max_width) && max_width <= 0) return true;
+  detail::CanvasFont font;
+  std::string align, baseline, direction;
+  if (!ReadTextState(state, context, &font, &align, &baseline, &direction)) return false;
+  web_geometry::FontInput input;
+  input.family = font.family;
+  input.size = font.size;
+  input.weight = font.weight;
+  input.italic = font.italic;
+  web_geometry::CanvasTextMetrics metrics;
+  if (!detail::Fonts(state).MeasureCanvas(text, input, &metrics)) return false;
+  const bool rtl = direction == "rtl";
+  const bool start = align == "start" || align.empty();
+  const bool right = align == "right" || (start && rtl) || (align == "end" && !rtl);
+  const bool center = align == "center";
+  // processor.mPt.x -= offsetX, offsetX a float of anchorX * totalWidth.
+  const float offset_x = center ? float(.5 * metrics.width) : right ? metrics.width : 0.0f;
+  const double origin_x = x - double(offset_x);
+  // CanvasRenderingContext2D::DrawOrMeasureText: mPt.y += baselineAnchor.
+  double anchor = metrics.alphabetic_baseline;
+  if (baseline == "top") anchor = metrics.em_ascent;
+  else if (baseline == "hanging") anchor = metrics.hanging_baseline;
+  else if (baseline == "middle") anchor = (metrics.em_ascent - metrics.em_descent) * .5;
+  else if (baseline == "ideographic") anchor = metrics.ideographic_baseline;
+  else if (baseline == "bottom") anchor = -metrics.em_descent;
+  y += anchor;
+  input.x = origin_x;
+  input.y = y;
+  double matrix[6];
+  if (!detail::GetMatrix(state.cx, context, matrix)) return false;
+  double horizontal_scale = 1.0;
+  if (std::isfinite(max_width) && max_width > 0 && metrics.width > max_width)
+    horizontal_scale = max_width / metrics.width;
+  float text_matrix[6] = {float(matrix[0]), float(matrix[1]), float(matrix[2]),
+                          float(matrix[3]), float(matrix[4]), float(matrix[5])};
+  if (horizontal_scale != 1.0) {
+    const float scale_x = float(horizontal_scale);
+    text_matrix[0] *= scale_x;
+    text_matrix[2] *= scale_x;
+    text_matrix[4] = float(matrix[0] * origin_x * (1.0 - horizontal_scale) + matrix[4]);
+  }
+  for (int i = 0; i < 6; ++i) matrix_out[i] = text_matrix[i];
+  // processor.mBoundingBox (tight ink, CSS px) moved by mPt.
+  if (ink && hasInk) {
+    *hasInk = metrics.ink;
+    ink[0] = metrics.ink_left + origin_x;
+    ink[1] = metrics.ink_top + y;
+    ink[2] = metrics.ink_right - metrics.ink_left;
+    ink[3] = metrics.ink_bottom - metrics.ink_top;
+  }
+  if (!detail::Fonts(state).CanvasGlyphRuns(text, input, runs, size)) return false;
+  *draw = true;
   return true;
 }
 }  // namespace ruyijs::web_canvas

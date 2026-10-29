@@ -17,6 +17,8 @@ enum class BodySource { OwnBytes, NativeBytesAlias, ScriptStream };
 struct BodyRecord {
   BodySource source=BodySource::OwnBytes;
   std::string bytes;
+  // Fetch "extract a body" type; Request/Response add it as Content-Type.
+  std::string contentType;
   BodyKind kind = BodyKind::Text;
   bool used = false;
   bool nullBody = true;  // Absence is distinct from a present zero-byte body.
@@ -44,6 +46,7 @@ const char* BodyInterface(const JS::CallArgs&);
 // Fills the record from a constructor argument. False reports the conversion
 // error; null and undefined leave the body absent.
 bool BodyInput(State&, JS::HandleValue, BodyRecord*);
+void AddBodyContentType(const BodyRecord&, HeaderPairs*);
 // Starts one consumption of the body; a second read rejects with the TypeError
 // the shell builds. text/json/arrayBuffer and blob/formData all go through this,
 // so the one-shot rule has one implementation.

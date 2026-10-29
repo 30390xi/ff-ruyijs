@@ -26,11 +26,11 @@ class HttpExchange final {
   // True when the prepared hop needs the transport; false once finished.
   bool Next();
   void Deliver(bool ok, HttpResult&& response);
-  // The prepared hop's transport input.
-  const std::string& method() const { return method_; }
+  // The prepared hop's transport input; a CORS preflight hop is OPTIONS without a body.
+  const std::string& method() const { return preflighting_ ? kPreflightMethod : method_; }
   const std::string& url() const { return url_; }
   const HeaderPairs& headers() const { return outgoing_; }
-  const std::string& body() const { return body_; }
+  const std::string& body() const { return preflighting_ ? kNoBody : body_; }
   uint32_t remaining() const { return remaining_; }
   bool finished() const { return finished_; }
   bool ok() const { return ok_; }
@@ -38,7 +38,11 @@ class HttpExchange final {
 
  private:
   using Clock = std::chrono::steady_clock;
+  static inline const std::string kPreflightMethod = "OPTIONS", kNoBody;
   bool Prepare(HttpResult* local);
+  bool NeedsPreflight(std::vector<std::string>* unsafeNames);
+  bool CompletePreflight(const HttpResult& response);
+  std::string RequestOrigin() const;
   void Fail(const char* message);
   void Finish(bool ok, HttpResult&& response);
   void Complete(HttpResult&& response);
@@ -49,7 +53,8 @@ class HttpExchange final {
   const std::string initialURL_;
   const Clock::time_point started_ = Clock::now();
   ruyijs::domain::browser_environment::UrlValue address_, source_;
-  std::string method_, url_, body_, referrer_, policy_, redirectSite_;
+  std::string method_, url_, body_, referrer_, policy_;
+  std::vector<std::string> redirectChain_;
   HeaderPairs headers_, outgoing_;
   HttpContext context_;
   std::vector<HttpTimingHop> timings_;
@@ -61,6 +66,10 @@ class HttpExchange final {
   double hopTick_ = 0;
   bool observe_ = false, credentialsTainted_ = false, credentials_ = false,
        crossOriginTainted_ = false;
+  // CORS: checks apply to fetch()/XHR/sendBeacon in cors mode; a hop is CORS
+  // when it leaves the request's origin (or follows a tainting redirect).
+  bool enforceCors_ = false, corsHop_ = false, originTainted_ = false,
+       preflighting_ = false, preflightPassed_ = false, servedLocally_ = false;
   bool finished_ = false, ok_ = false;
 };
 }

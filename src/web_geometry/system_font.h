@@ -37,6 +37,27 @@ struct CanvasTextMetrics {
   double hanging_baseline = 0, alphabetic_baseline = 0, ideographic_baseline = 0;
 };
 
+// One glyph run as gfxTextRun hands it to the DrawTarget: the DirectWrite
+// face (one reference the caller releases), whether gfxFont draws it with the
+// synthetic-oblique skew, its origin on the baseline, and each glyph's id and
+// position in CSS pixels.
+struct CanvasGlyphRun {
+  IDWriteFontFace* face = nullptr;
+  bool syntheticItalic = false;
+  // gfxDWriteFont::GetScaledFont's useEmbeddedBitmap without the rendering
+  // mode test: a CJK font (OS/2 code pages) with an EBLC strike at the size.
+  bool cjkBitmapStrike = false;
+  // The face has a COLR table: gfxFont::DrawGlyphs paints its colour glyphs
+  // through RenderColorGlyph, not FillGlyphs.
+  bool colorFont = false;
+  double origin_x = 0, origin_y = 0;
+  std::vector<uint16_t> glyphs;
+  std::vector<double> x, y;
+};
+
+// Releases the faces CanvasGlyphRuns referenced.
+void ReleaseCanvasGlyphRuns(std::vector<CanvasGlyphRun>*);
+
 class SystemFonts final {
  public:
   SystemFonts();
@@ -55,6 +76,10 @@ class SystemFonts final {
   // whose luminance selects Skia's mask gamma table.
   bool BuildCanvasGlyphMasks(const std::u16string&, const FontInput&, const float matrix[6],
                              const uint8_t rgb[3], std::vector<CanvasGlyphMask>*);
+  // The runs BuildCanvasGlyphMasks rasterises, as glyph ids and positions, and
+  // the em size (CSS pixels, app-unit rounded) the ScaledFont is created at.
+  bool CanvasGlyphRuns(const std::u16string&, const FontInput&, std::vector<CanvasGlyphRun>*,
+                       float* emsize);
   // The primary font's (first family with a space glyph) content-area height
   // and normal line height, rounded like gfxDWriteFont/nsFontMetrics.
   bool LineMetrics(const FontInput&, double* content, double* normal);

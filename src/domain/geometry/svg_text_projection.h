@@ -35,9 +35,16 @@ inline Measurement ProjectInk(InkBox ink, double advance, double firstAdvance,
   const double top = std::max(0.0, -std::floor(ink.top + ascent));
   const double bottom = std::max(0.0, std::ceil(ink.bottom + ascent) - height);
   const auto round = [](double v) { return std::floor(v + .5); };
-  const double app[4] = {round(ink.left) - left, round(ink.top + ascent) - top,
-    round(ink.right - ink.left) + left + right,
-    round(ink.bottom - ink.top) + top + bottom};
+  // TextRenderedRun::GetRunUserSpaceRect: the loose ink box united with the
+  // font box (0, -ascent, advance, ascent + descent), rounded to app units,
+  // then inflated by the frame's ink overflow margins above.
+  const double unionLeft = std::min(ink.left, 0.0);
+  const double unionTop = std::min(ink.top, -ascent);
+  const double unionRight = std::max(ink.right, advance);
+  const double unionBottom = std::max(ink.bottom, height - ascent);
+  const double app[4] = {round(unionLeft) - left, round(unionTop + ascent) - top,
+    round(unionRight - unionLeft) + left + right,
+    round(unionBottom - unionTop) + top + bottom};
   float fill[4];
   for (unsigned i = 0; i < 4; ++i) fill[i] = float(double(float(app[i] / 60)) / factor);
   const double translationY = y - ascent / 60 / double(factor);

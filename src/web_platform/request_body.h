@@ -4,12 +4,15 @@
 #include "js/RootingAPI.h"
 
 namespace ruyijs::web_platform {
-// Internal read port. Owns a bounded snapshot, never a second platform object.
+inline constexpr size_t kRequestBodyLimit = 1024 * 1024;
+// Internal read port (Fetch "extract a body"). Owns a bounded snapshot, never a
+// second platform object; the caller sets `limit` before reading (sendBeacon
+// and forms keep 1 MiB, fetch()/XHR pass their own bound).
 struct RequestBody {
   std::string bytes, contentType;
   bool tooLarge = false;
+  size_t limit = kRequestBodyLimit;
 };
-inline constexpr size_t kRequestBodyLimit = 1024 * 1024;
 bool ReadRequestBody(JSContext*, JS::HandleValue, RequestBody*);
 bool ReadFormRequestBody(JSContext*, JS::HandleObject, RequestBody*);
 bool ReadRequestText(JSContext*, JS::HandleValue, std::string*);

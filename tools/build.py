@@ -20,6 +20,8 @@ import binding_order
 import sanitizer_data
 import compression_native
 import urlpattern_native
+import rust_runtime
+import skia_native
 import image_native
 
 
@@ -38,6 +40,9 @@ def arguments():
     parser.add_argument("--firefox-bindings", default=os.environ.get("RUYIJS_FIREFOX_BINDINGS"),
                         help="generated Firefox dom/bindings directory (prototype member order; "
                              "env RUYIJS_FIREFOX_BINDINGS; default: tools/generated)")
+    parser.add_argument("--firefox-gfx-obj", default=os.environ.get("RUYIJS_FIREFOX_GFX_OBJ"),
+                        help="Firefox browser build objdir whose gfx/skia objects draw canvas "
+                             "(env RUYIJS_FIREFOX_GFX_OBJ)")
     parser.add_argument("--pristine", action="store_true", help="relink donor objects only")
     parser.add_argument("--prepare-only", action="store_true", help="generate and record inputs")
     parser.add_argument("--no-incremental", action="store_true",
@@ -49,6 +54,8 @@ def arguments():
     args = parser.parse_args()
     if not args.donor_obj:
         parser.error("--donor-obj (or RUYIJS_DONOR_OBJ) is required")
+    if not args.pristine and not args.firefox_gfx_obj:
+        parser.error("--firefox-gfx-obj (or RUYIJS_FIREFOX_GFX_OBJ) is required")
     return args
 
 
@@ -93,6 +100,7 @@ def main():
                 write_if_changed(order, (recorded / "firefox_binding_order.h").read_text("utf-8"), "utf-8")
                 inputs += [recorded / "firefox_binding_order.h", order]
             inputs += sanitizer_data.prepare(donor.src, directory)
+            inputs += skia_native.inputs(donor, args.firefox_gfx_obj)
             sources.append(font_unit)
             inputs += font_inputs
             inputs += source_inputs + product_sources.inputs(root)
@@ -138,6 +146,8 @@ def main():
         if not args.pristine:
             objects += compression_native.build(native)
             objects += urlpattern_native.build(native)
+            objects += rust_runtime.build(native)
+            objects += skia_native.build(native, args.firefox_gfx_obj)
             objects += image_native.build(native)
             report["imageCodecs"] = json.loads((directory / "image-native/build.json").read_text("utf-8"))
             report["compressionCodecs"] = json.loads(

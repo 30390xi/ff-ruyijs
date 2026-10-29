@@ -29,6 +29,8 @@
 !/tools/product_sources.py
 !/tools/provenance.py
 !/tools/sanitizer_data.py
+!/tools/skia_native.py
+!/tools/rust_runtime.py
 !/tools/urlpattern_native.py
 !/tools/wheel_runtime.py
 __pycache__/

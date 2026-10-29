@@ -60,6 +60,23 @@ def _prefer_bundled_crt(shell):
         pass
 
 
+TLS_VERSIONS = tuple(str(v) for v in range(100, 160))
+
+
+def _tls_version(value):
+    """Normalize a TLS profile choice ("120", 120, "120.0", "firefox-120")."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        raise TypeError("tls must be a Firefox version string or int, or None")
+    version = str(value).strip().lower()
+    version = version.removeprefix("firefox-").removeprefix("firefox").strip()
+    version = version.removesuffix(".0")
+    if version not in TLS_VERSIONS:
+        raise ValueError(f"unsupported tls {value!r}; choose {TLS_VERSIONS[0]}-{TLS_VERSIONS[-1]}")
+    return version
+
+
 class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceControl, ConsoleControl,
               InspectorControl, InputControl, EvaluationControl):
     """Evaluate JavaScript from Python 3.10+ with bounded transport waits.
@@ -70,9 +87,15 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
     ``proxy`` selects an explicit HTTP(S) proxy URL for this context's network
     requests. None or an empty string uses direct connections. It does not
     alter the host environment or other contexts.
+    ``tls`` selects the Firefox release (100-159, e.g. ``"120"`` or ``120``)
+    whose TLS ClientHello, HTTP/2 settings and HTTP/3 priorities this context's
+    Necko transport sends. None keeps Firefox 159 (or NECKO_FIREFOX if set).
+    It changes the network fingerprint only; pair it with a matching
+    ``configure_fingerprint`` user agent when the page should agree.
     """
 
-    def __init__(self, shell=None, timeout=10.0, environment=None, mode="default", proxy=None):
+    def __init__(self, shell=None, timeout=10.0, environment=None, mode="default", proxy=None,
+                 tls=None):
         if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("timeout must be a finite positive number")
         self.timeout = float(timeout)
@@ -82,9 +105,14 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
             raise TypeError("proxy must be a URL string or None")
         if proxy and any(c in proxy for c in "\x00\r\n"):
             raise ValueError("proxy URL contains invalid characters")
+        tls_version = _tls_version(tls)
         # Capture transport settings for this child without changing os.environ.
         child_environment = dict(os.environ)
         child_environment["RUYIJS_HTTP_PROXY"] = proxy or ""
+        if tls_version is not None:
+            # The Necko child inherits this and builds its TLS profile from it.
+            child_environment["NECKO_FIREFOX"] = tls_version
+        self.tls = tls_version or child_environment.get("NECKO_FIREFOX") or "159"
         self.mode = mode
         self._lock, self._next_id = threading.Lock(), 0
         self._callbacks = Callbacks()

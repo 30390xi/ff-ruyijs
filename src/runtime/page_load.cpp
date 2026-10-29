@@ -196,7 +196,8 @@ bool PageLoad::LoadFrame(BrowsingContext& target, const std::string& url,
   if (fragment != std::string::npos && committed.find('#') == std::string::npos)
     committed += url.substr(fragment);
   if (!owners.environment.SetFrameLocation(committed) ||
-      !ConfigureSecureExposure(target) || !IsolateCrossSiteFrame(target, committed)) return false;
+      !ConfigureSecureExposure(target) || !IsolateCrossSiteFrame(target, committed) ||
+      !owners.environment.CommitAgentCluster(AgentClusterHeader(http))) return false;
   // A fetched document does not inherit its creator's policies (D133: the
   // response's own CSP header is not read).
   if (target.security) target.security->Reset();
@@ -227,6 +228,7 @@ bool PageLoad::LoadFrameHtml(BrowsingContext& target, const std::string& html) {
   if (!owners.environment.SetFrameLocation("about:srcdoc")) return false;
   // The child document's secure-context surface follows its committed URL.
   if (!ConfigureSecureExposure(target)) return false;
+  if (!owners.environment.CommitAgentCluster("")) return false;
   // An about:srcdoc document inherits its creator's policies.
   if (target.security) {
     target.security->Reset();

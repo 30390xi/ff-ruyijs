@@ -41,7 +41,7 @@ bool RequestInitInput(State& state, JS::HandleValue input, RequestInitFields* in
   if (!get("body", InitBody)) return false;
   BodyRecord body;
   if (!BodyInput(state, value, &body)) return false;
-  d.body=std::move(body.bytes);d.kind=body.kind;d.nullBody=body.nullBody;
+  d.body=std::move(body.bytes);d.bodyType=std::move(body.contentType);d.kind=body.kind;d.nullBody=body.nullBody;
   if (!get("cache", InitCache) || (!value.isUndefined() && !Enum(cx,value,&d.cache,
       {"default","no-store","reload","no-cache","force-cache","only-if-cached"}))) return false;
   if (!get("credentials", InitCredentials) || (!value.isUndefined() && !Enum(cx,value,&d.credentials,

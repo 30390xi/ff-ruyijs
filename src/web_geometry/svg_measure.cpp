@@ -21,8 +21,10 @@ bool Text(State& s, const SvgInput& input, float scale, svg::SvgTextMeasurement*
   font.italic = input.style.Get("font-style") != "normal";
   const auto weight = input.style.Get("font-weight");
   if (!weight.empty()) font.weight = unsigned(std::strtoul(weight.c_str(), nullptr, 10));
-  font.language = SvgAttribute(input, "lang");
-  if (font.language.empty()) font.language = SvgAttribute(input, "xml:lang");
+  // The inherited content language from the cascade (own lang/xml:lang or an
+  // ancestor's).
+  font.language = input.style.Get("-x-lang");
+  if (font.language == "-x-none") font.language.clear();
   font.scale = scale;
   font.transform = input.transform;
   font.x = SvgLength(input, "x", input.viewportWidth) + SvgLength(input, "dx", input.viewportWidth);
