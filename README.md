@@ -245,6 +245,8 @@ Python 3.10 and above on Windows x64 (64-bit). Tested up to Python 3.14.
 <summary><b>Does it work on macOS or Linux?</b></summary>
 
 Not yet — currently Windows x64 only. Cross-platform support is planned.
+
+The JS engine is Mozilla's official **SpiderMonkey** and the networking stack is Mozilla's official **Necko** — both are pulled directly from the Firefox source tree. You can check out and build them yourself from [mozilla-central](https://hg.mozilla.org/mozilla-central/). The customizations ruyijs makes on top do not affect the engines' core functionality, so a vanilla SpiderMonkey + Necko built for Linux or macOS will work as the foundation for a port.
 </details>
 
 <details>

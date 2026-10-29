@@ -245,6 +245,8 @@ Windows x64（64 位）上的 Python 3.10 及以上版本，已测试至 Python 
 <summary><b>支持 macOS 或 Linux 吗？</b></summary>
 
 暂不支持，目前仅限 Windows x64。跨平台支持在计划中。
+
+JS 引擎使用的是 Mozilla 官方的 **SpiderMonkey**，网络库使用的是 Mozilla 官方的 **Necko** —— 均直接从 Firefox 源码树中抽取。你可以自行从 [mozilla-central](https://hg.mozilla.org/mozilla-central/) 拉取并编译。ruyijs 在此基础上的定制化修改不影响引擎核心功能，因此在 Linux 或 macOS 上原生编译的 SpiderMonkey + Necko 可以作为移植的基础。
 </details>
 
 <details>
