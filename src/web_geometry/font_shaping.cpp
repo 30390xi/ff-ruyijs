@@ -170,3 +170,4 @@ bool ShapeFont(const SelectedFont& selected, const FontInput& input,
   return true;
 }
 }
+

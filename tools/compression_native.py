@@ -36,10 +36,11 @@ def build(native):
                 'donorConfigSHA256': digest(native.donor.config_path),
                 'include': native.env.get('INCLUDE'),
                 'prefix': 'RUYIJS_CS_Z_', 'crt': 'dynamic',
-                'target': 'x86_64-pc-windows-msvc'}
+                'target': native.donor.rust_target}
     signature = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     stamp = directory / 'build.json'
-    libs = [directory / 'ruyijs_cs_zlib.lib', directory / 'ruyijs_cs_brotli.lib']
+    libs = [native.static_library(directory, 'ruyijs_cs_zlib'),
+            native.static_library(directory, 'ruyijs_cs_brotli')]
     if stamp.is_file():
         old = json.loads(stamp.read_text('utf8'))
         if not native.incremental['disabled'] and old.get('signature') == signature and all(
@@ -58,8 +59,7 @@ def build(native):
         if completed.returncode:
             raise RuntimeError(name + ': ' + (completed.stdout + completed.stderr)[-10000:])
 
-    base = [rustc, '--edition=2021', '--target=x86_64-pc-windows-msvc',
-            '-C', 'opt-level=2', '-C', 'panic=abort', '-C', 'target-feature=-crt-static']
+    base = native.rustc_base(rustc, '2021')
     def features(*names):
         return [item for name in names for item in ('--cfg', 'feature="' + name + '"')]
     rlib = directory / 'libzlib_rs.rlib'
@@ -74,18 +74,18 @@ def build(native):
     # One Rust std/global allocator already belongs to donor jsrust. Rlibs emit
     # library code without a new executable-level allocator shim; archive only
     # our two crates and let that original runtime satisfy their dependencies.
-    run([librarian, *lib_prefix, '-OUT:' + str(libs[0]), str(abi), str(rlib)], 'archive_zlib')
+    run(native.archive(libs[0], [abi, rlib]), 'archive_zlib')
     # Exact moz.build source inventory; separate TUs retain upstream semantics.
     units = re.findall(r"'((?:common|dec|enc)/[^']+\.c)'",
                        (source / 'brotli/moz.build').read_text('utf8'))
     objects = []
     for unit in units:
-        output = directory / (unit.replace('/', '_')[:-2] + '.obj')
-        run([compiler, '-nologo', '-TC', '-std:c11', '-MD', '-O2', '-Brepro',
-             '-DBROTLI_BUILD_PORTABLE', '-I' + str(source / 'brotli/include'),
-             '-c', str(source / 'brotli' / unit), '-Fo' + str(output)], output.stem)
+        output = directory / (unit.replace('/', '_')[:-2] + native.donor.object_suffix)
+        run(native.compile_foreign(
+            source / 'brotli' / unit, output,
+            ['-DBROTLI_BUILD_PORTABLE', '-I' + str(source / 'brotli/include')]), output.stem)
         objects.append(str(output))
-    run([librarian, *lib_prefix, '-OUT:' + str(libs[1]), *objects], 'archive_brotli')
+    run(native.archive(libs[1], objects), 'archive_brotli')
     if any(digest(source / row['path']) != row['sha256'] for row in manifest['files']):
         raise ValueError('Compression source changed during dependency build')
     report['outputs'] = {path.name: digest(path) for path in libs}

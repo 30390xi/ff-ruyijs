@@ -1,3 +1,11 @@
+#ifndef _WIN32
+// RUYIJS_POSIX_STUB
+
+#include "web_geometry/glyph_mask.h"
+namespace ruyijs::web_geometry {
+bool GlyphPalette(IDWriteFontFace*, std::vector<uint32_t>*) { return false; }
+}
+#else
 // The palette a colour font's COLR layers name: palette 0 of the CPAL table, the
 // one Skia's DWriteFontTypeface keeps as its target palette.
 #include <dwrite_2.h>
@@ -29,3 +37,5 @@ bool GlyphPalette(IDWriteFontFace* face, std::vector<uint32_t>* colors) {
   return true;
 }
 }  // namespace ruyijs::web_geometry
+
+#endif

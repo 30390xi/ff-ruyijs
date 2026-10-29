@@ -1,3 +1,11 @@
+#ifndef _WIN32
+// RUYIJS_POSIX_STUB
+
+#include "web_media/image_wic.h"
+namespace ruyijs::web_media::wic {
+// GifFrames is inline in image_wic.h on this platform.
+}
+#else
 // GIF frames returned by WIC are frame rectangles, so compose onto the canvas.
 #include "web_media/image_wic.h"
 #include <algorithm>
@@ -62,3 +70,5 @@ bool GifFrames(IWICImagingFactory* factory, IWICBitmapDecoder* decoder,
   return true;
 }
 }
+
+#endif

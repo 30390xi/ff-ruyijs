@@ -1,17 +1,39 @@
 #include "web_geometry/font_backend.h"
 #include "firefox_font_prefs.h"
 #include "web_geometry/font_config.h"
+#include <cstdint>
 #include <cstring>
 #include <mutex>
+#ifdef _WIN32
 #pragma comment(lib, "user32.lib")  // SystemParametersInfoW (system-ui menu font)
+#endif
 
 namespace ruyijs::web_geometry {
 namespace {
 std::wstring Wide(const std::string& text) {
+#ifdef _WIN32
   const int size = MultiByteToWideChar(CP_UTF8, 0, text.data(), int(text.size()), nullptr, 0);
   std::wstring result(size, L'\0');
   MultiByteToWideChar(CP_UTF8, 0, text.data(), int(text.size()), result.data(), size);
   return result;
+#else
+  std::wstring result;
+  const auto* p = reinterpret_cast<const unsigned char*>(text.data());
+  const auto* end = p + text.size();
+  while (p < end) {
+    uint32_t cp;
+    if (*p < 0x80) { cp = *p++; }
+    else if ((*p & 0xE0) == 0xC0 && p + 1 < end) {
+      cp = (*p & 0x1F) << 6 | (p[1] & 0x3F); p += 2;
+    } else if ((*p & 0xF0) == 0xE0 && p + 2 < end) {
+      cp = (*p & 0x0F) << 12 | (p[1] & 0x3F) << 6 | (p[2] & 0x3F); p += 3;
+    } else if ((*p & 0xF8) == 0xF0 && p + 3 < end) {
+      cp = (*p & 0x07) << 18 | (p[1] & 0x3F) << 12 | (p[2] & 0x3F) << 6 | (p[3] & 0x3F); p += 4;
+    } else { cp = *p++; }
+    result.push_back(wchar_t(cp));
+  }
+  return result;
+#endif
 }
 std::mutex g_language_lock;
 std::string g_language;  // The browser locale; the OS locale when unset.
@@ -22,9 +44,13 @@ std::string Group(const std::string& language) {
     value = g_language;
   }
   if (value.empty()) {
+#ifdef _WIN32
     wchar_t locale[LOCALE_NAME_MAX_LENGTH]{};
     if (GetUserDefaultLocaleName(locale, LOCALE_NAME_MAX_LENGTH))
       for (wchar_t ch : locale) { if (!ch) break; value += char(ch); }
+#else
+    value = "en-US";
+#endif
   }
   for (char& ch : value) if (ch >= 'A' && ch <= 'Z') ch += 'a'-'A';
   if (value.starts_with("zh"))
@@ -60,9 +86,13 @@ void Split(const std::string& value, std::vector<std::wstring>* out,
 }
 // LookAndFeel's StyleSystemFont::Menu on Windows: the non-client menu font.
 std::wstring MenuFont() {
+#ifdef _WIN32
   NONCLIENTMETRICSW metrics{}; metrics.cbSize = sizeof(metrics);
   if (!SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0)) return {};
   return metrics.lfMenuFont.lfFaceName;
+#else
+  return {};
+#endif
 }
 }
 void SetBrowserLanguage(const std::string& language) {

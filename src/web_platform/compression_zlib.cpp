@@ -13,7 +13,13 @@ int RUYIJS_CS_Z_deflateEnd(z_streamp);
 int RUYIJS_CS_Z_inflateEnd(z_streamp);
 }
 namespace ruyijs::web_platform {
+#if defined(_WIN32)
 static_assert(sizeof(z_stream)==88,"MSVC x64 original z_stream ABI");
+#elif defined(__APPLE__)
+static_assert(sizeof(z_stream)==112,"Darwin LP64 z_stream ABI");
+#else
+#error unsupported z_stream ABI
+#endif
 void* OpenZlibCodec(CompressionFormat format,bool decompress) {
   auto* stream=new(std::nothrow) z_stream{};
   if (!stream) return nullptr;

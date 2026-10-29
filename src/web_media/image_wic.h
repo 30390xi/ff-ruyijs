@@ -1,4 +1,5 @@
 #pragma once
+#ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
 #include <wincodec.h>
@@ -27,3 +28,14 @@ bool PixelFrame(IWICImagingFactory*, IWICBitmapFrameDecode*, uint32_t, uint32_t,
 bool GifFrames(IWICImagingFactory*, IWICBitmapDecoder*, uint32_t, uint32_t,
                domain::web_media::ImageData*);
 }
+#else
+// RUYIJS_POSIX_STUB
+#include "web_media/image_codec.h"
+#include <string>
+namespace ruyijs::web_media::wic {
+struct Apartment { bool ok() const { return false; } };
+inline bool PixelFrame(void*, void*, uint32_t, uint32_t, domain::web_media::ImageFrame*) { return false; }
+inline bool GifFrames(void*, void*, uint32_t, uint32_t, domain::web_media::ImageData*) { return false; }
+inline uint32_t Number(void*, const wchar_t*, uint32_t fallback = 0) { return fallback; }
+}
+#endif

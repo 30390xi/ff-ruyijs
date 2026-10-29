@@ -75,7 +75,8 @@ def main():
         native = Native(donor, root, directory, args)
         objects = donor.objects()
         inputs = donor.source_inputs() + objects + donor.libraries()
-        inputs += [donor.obj / "dist/bin/js.exe", donor.obj / "dist/bin/mozglue.dll"]
+        inputs += [donor.obj / "dist/bin" / donor.shell_name,
+                   donor.obj / "dist/bin" / donor.glue_name]
         inputs += list((root / "tools").glob("*.py"))
         sources = []
         if not args.pristine:
@@ -112,11 +113,12 @@ def main():
             inputs += list((root / "docs").rglob("*.md"))
             inputs += [path for path in (root / "vendor/compression-native").rglob("*") if path.is_file()]
             inputs += [path for path in (root / "vendor/image-native").rglob("*") if path.is_file()]
+        shell_name = os.environ.get("RUYIJS_OUTPUT_NAME", donor.shell_name)
         report.update(donor=str(donor.obj), source=str(donor.src),
-                      executable=str(destination / "js.exe"),
+                      executable=str(destination / shell_name),
                       inputs=inventory(inputs),
                       compiler=native.compiler(), linker=native.linker(),
-                      include=native.env["INCLUDE"],
+                      include=native.env.get("INCLUDE", ""),
                       library_paths=donor.libpaths(args.vs_root),
                       runtime_dll_dir=args.runtime_dll_dir)
         if args.prepare_only:
@@ -124,7 +126,7 @@ def main():
             return 0
         native.check_tools(compile_needed=bool(sources))
         if sources:
-            original = donor.shell / "Unified_cpp_js_src_shell0.obj"
+            original = donor.shell / ("Unified_cpp_js_src_shell0" + donor.object_suffix)
             if objects.count(original) != 1:
                 raise ValueError("shell0 object must occur once in donor list")
             objects.remove(original)
@@ -134,7 +136,7 @@ def main():
                         exceptions=product_sources.needs_exceptions(source))
             with ThreadPoolExecutor(max_workers=args.jobs) as pool:
                 objects += list(pool.map(compile_unit, sources))
-        executable = destination / os.environ.get("RUYIJS_OUTPUT_NAME", "js.exe")
+        executable = destination / shell_name
         if not args.pristine:
             objects += compression_native.build(native)
             objects += urlpattern_native.build(native)
@@ -160,14 +162,21 @@ def main():
             # The Necko Python runtime ships with releases, not the source tree;
             # a checkout without it still builds js.exe and skips this deploy.
             oneshot_source = root / "src/resource_network/necko_oneshot.py"
-            oneshot = root / "vendor/necko-derived/python/Lib/site-packages/ruyijs_necko/oneshot.py"
-            if oneshot.parent.is_dir():
+            package_dirs = [root / "vendor/necko-derived/python/Lib/site-packages/ruyijs_necko"]
+            package_dirs += sorted((root / "vendor/necko-derived/python").glob(
+                "lib/python*/site-packages/ruyijs_necko"))
+            deployed_oneshot = None
+            for package in package_dirs:
+                if not package.is_dir():
+                    continue
+                oneshot = package / "oneshot.py"
                 oneshot.write_bytes(oneshot_source.read_bytes())
                 deployed.append(oneshot)
-                report["networkHelper"] = {"source": str(oneshot_source), "deployed": str(oneshot),
-                                           "sha256": digest(oneshot)}
-            else:
-                report["networkHelper"] = {"source": str(oneshot_source), "deployed": None}
+                deployed_oneshot = oneshot
+            report["networkHelper"] = {"source": str(oneshot_source),
+                                       "deployed": str(deployed_oneshot) if deployed_oneshot else None}
+            if deployed_oneshot is not None:
+                report["networkHelper"]["sha256"] = digest(deployed_oneshot)
         report["incremental"] = native.incremental
         verify_unchanged(report["inputs"], rehash=True)
         version = subprocess.run([str(executable), "--version"], cwd=destination,

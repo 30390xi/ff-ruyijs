@@ -1,3 +1,30 @@
+#ifndef _WIN32
+// RUYIJS_POSIX_STUB
+
+#include "web_crypto/digest_backend.h"
+#include <CommonCrypto/CommonDigest.h>
+#include <cstdint>
+#include <limits>
+namespace ruyijs::web_crypto {
+bool ComputeDigest(HashAlgorithm algorithm, const void* input, size_t length,
+                   DigestBytes* output) noexcept {
+  if (!output || length > std::numeric_limits<uint32_t>::max()) return false;
+  const auto* data = static_cast<const uint8_t*>(input ? input : "");
+  const auto size = CC_LONG(length);
+  switch (algorithm) {
+    case HashAlgorithm::Sha1:
+      CC_SHA1(data, size, output->data); output->size = CC_SHA1_DIGEST_LENGTH; return true;
+    case HashAlgorithm::Sha256:
+      CC_SHA256(data, size, output->data); output->size = CC_SHA256_DIGEST_LENGTH; return true;
+    case HashAlgorithm::Sha384:
+      CC_SHA384(data, size, output->data); output->size = CC_SHA384_DIGEST_LENGTH; return true;
+    case HashAlgorithm::Sha512:
+      CC_SHA512(data, size, output->data); output->size = CC_SHA512_DIGEST_LENGTH; return true;
+  }
+  return false;
+}
+}
+#else
 #include "web_crypto/digest_backend.h"
 #include <windows.h>
 #include <bcrypt.h>
@@ -21,3 +48,5 @@ bool ComputeDigest(HashAlgorithm algorithm, const void* input, size_t length,
   return true;
 }
 }
+
+#endif

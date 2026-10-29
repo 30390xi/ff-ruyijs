@@ -1,3 +1,12 @@
+#ifndef _WIN32
+// RUYIJS_POSIX_STUB
+
+#include "web_geometry/glyph_mask.h"
+namespace ruyijs::web_geometry {
+bool GlyphColorMask(const SelectedFont&, float, bool, const float*, float, float, uint16_t,
+                    const uint8_t*, CanvasGlyphMask*) { return false; }
+}
+#else
 // COLR glyphs: gfxFont::RenderColorGlyph and COLRFonts::PaintGlyphLayers. Firefox
 // does not hand a COLRv0 glyph to Skia's colour scaler on Windows; it reads the
 // BaseGlyphRecord itself and fills each LayerRecord glyph as an ordinary text
@@ -115,3 +124,5 @@ bool GlyphColorMask(const SelectedFont& font, float emSize, bool sampled, const 
   return true;
 }
 }  // namespace ruyijs::web_geometry
+
+#endif

@@ -7,7 +7,11 @@
 #include "jsapi.h"
 #include "js/Array.h"
 #include "js/PropertyAndElement.h"
+#include <cwctype>
+#include <cstdint>
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include <map>
 #include <mutex>
 #include <set>
@@ -29,10 +33,29 @@ std::wstring Lower(const std::wstring& text) {
   return out;
 }
 std::wstring Wide(const std::string& utf8) {
+#ifdef _WIN32
   const int size = MultiByteToWideChar(CP_UTF8, 0, utf8.data(), int(utf8.size()), nullptr, 0);
   std::wstring out(size, L'\0');
   if (size) MultiByteToWideChar(CP_UTF8, 0, utf8.data(), int(utf8.size()), out.data(), size);
   return out;
+#else
+  std::wstring out;
+  const auto* p = reinterpret_cast<const unsigned char*>(utf8.data());
+  const auto* end = p + utf8.size();
+  while (p < end) {
+    uint32_t cp;
+    if (*p < 0x80) { cp = *p++; }
+    else if ((*p & 0xE0) == 0xC0 && p + 1 < end) {
+      cp = (*p & 0x1F) << 6 | (p[1] & 0x3F); p += 2;
+    } else if ((*p & 0xF0) == 0xE0 && p + 2 < end) {
+      cp = (*p & 0x0F) << 12 | (p[1] & 0x3F) << 6 | (p[2] & 0x3F); p += 3;
+    } else if ((*p & 0xF8) == 0xF0 && p + 3 < end) {
+      cp = (*p & 0x07) << 18 | (p[1] & 0x3F) << 12 | (p[2] & 0x3F) << 6 | (p[3] & 0x3F); p += 4;
+    } else { cp = *p++; }
+    out.push_back(wchar_t(cp));
+  }
+  return out;
+#endif
 }
 bool Text(JSContext* cx, JS::HandleValue value, std::string* out) {
   JS::RootedString text(cx, value.toString());

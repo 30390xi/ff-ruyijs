@@ -1,19 +1,34 @@
-"""Locate the Windows x64 runtime for Python 3.10+ clients."""
+"""Locate the runtime for Python 3.10+ clients."""
 
 import os
 from pathlib import Path
 import platform
+import sys
+
+
+def macos_arm64():
+    return sys.platform == "darwin" and platform.machine().lower() in ("arm64", "aarch64")
+
+
+def shell_filename():
+    """Basename of the SpiderMonkey shell this host launches."""
+    return "js" if macos_arm64() else "js.exe"
+
+
+def glue_filename():
+    """Donor glue library copied beside the shell."""
+    return "libmozglue.dylib" if macos_arm64() else "mozglue.dll"
 
 
 def get_runtime_path():
     """Return the runtime root containing ``dist`` and ``vendor``.
 
     ``RUYIJS_SHELL`` selects an existing executable and its enclosing runtime
-    root. Otherwise prefer a source checkout's ``dist/js.exe`` to the runtime
-    bundled in the installed package. This function never downloads files.
+    root. Otherwise prefer a source checkout's shell to the runtime bundled in
+    the installed package. This function never downloads files.
     """
-    if os.name != "nt" or platform.machine().lower() not in ("amd64", "x86_64"):
-        raise OSError("ruyijs requires Windows x64")
+    if not macos_arm64() and (os.name != "nt" or platform.machine().lower() not in ("amd64", "x86_64")):
+        raise OSError("ruyijs requires Windows x64 or macOS arm64")
 
     override = os.environ.get("RUYIJS_SHELL")
     if override:
@@ -26,13 +41,14 @@ def get_runtime_path():
     candidates = [package / "_runtime"]
     if package.parent.name == "python":
         candidates.insert(0, package.parent.parent)
+    shell_name = shell_filename()
     for root in candidates:
-        if (root / "dist" / "js.exe").is_file():
+        if (root / "dist" / shell_name).is_file():
             return root
 
-    searched = ", ".join(str(root / "dist" / "js.exe") for root in candidates)
+    searched = ", ".join(str(root / "dist" / shell_name) for root in candidates)
     raise FileNotFoundError(
-        "ruyijs runtime is missing. Install the Windows x64 wheel, build the "
-        "source runtime, or set RUYIJS_SHELL to an existing executable. "
-        f"Searched: {searched}"
+        "ruyijs runtime is missing. Install the platform wheel, build the "
+        "source runtime from the Firefox donor, or set RUYIJS_SHELL to an "
+        f"existing executable. Searched: {searched}"
     )

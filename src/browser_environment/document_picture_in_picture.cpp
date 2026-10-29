@@ -12,6 +12,7 @@
 #include "js/Object.h"
 #include "js/Promise.h"
 #include "js/PropertyAndElement.h"
+#include <cmath>
 
 namespace ruyijs::browser_environment {
 namespace {

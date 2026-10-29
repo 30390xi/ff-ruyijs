@@ -1,3 +1,263 @@
+#ifndef _WIN32
+#include "web_crypto/cng_backend.h"
+#include <CommonCrypto/CommonCryptor.h>
+#include <CommonCrypto/CommonHMAC.h>
+#include <Security/Security.h>
+#include <cstddef>
+#include <cstring>
+
+// libsystem exports these, and the macOS 26 SDK headers do not declare them.
+extern "C" CCCryptorStatus CCCryptorGCMOneshotEncrypt(
+    CCAlgorithm alg, const void* key, size_t keyLength, const void* iv, size_t ivLength,
+    const void* aData, size_t aDataLength, const void* dataIn, size_t dataInLength,
+    void* cipherOut, void* tagOut, size_t tagLength);
+extern "C" CCCryptorStatus CCCryptorGCMOneshotDecrypt(
+    CCAlgorithm alg, const void* key, size_t keyLength, const void* iv, size_t ivLength,
+    const void* aData, size_t aDataLength, const void* dataIn, size_t dataInLength,
+    void* dataOut, const void* tag, size_t tagLength);
+
+namespace ruyijs::web_crypto {
+namespace {
+namespace ec = ruyijs::domain::crypto;
+
+bool AesKey(const Bytes& key) { return key.size() == 16 || key.size() == 24 || key.size() == 32; }
+int CurveBits(const ec::EcCurve& curve) {
+  if (curve.size == 32) return 256;
+  if (curve.size == 48) return 384;
+  if (curve.size == 66) return 521;
+  return 0;
+}
+CFMutableDictionaryRef KeyAttrs(const ec::EcCurve& curve, bool priv) {
+  int bits = CurveBits(curve);
+  CFNumberRef number = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &bits);
+  CFMutableDictionaryRef attrs = CFDictionaryCreateMutable(
+      kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+  CFDictionarySetValue(attrs, kSecAttrKeyType, kSecAttrKeyTypeECSECPrimeRandom);
+  CFDictionarySetValue(attrs, kSecAttrKeySizeInBits, number);
+  CFDictionarySetValue(attrs, kSecAttrKeyClass, priv ? kSecAttrKeyClassPrivate : kSecAttrKeyClassPublic);
+  CFRelease(number);
+  return attrs;
+}
+void Wipe(Bytes* bytes) {
+  volatile uint8_t* cursor = bytes->data();
+  for (size_t i = 0; i < bytes->size(); ++i) cursor[i] = 0;
+}
+SecKeyRef ImportPoint(const ec::EcKey& key, bool priv) {
+  if (!key.curve || !CurveBits(*key.curve)) return nullptr;
+  const size_t n = key.curve->size;
+  if (key.x.size() != n || key.y.size() != n || (priv && key.d.size() != n)) return nullptr;
+  Bytes blob;
+  blob.reserve(1 + (priv ? 3 : 2) * n);
+  blob.push_back(0x04);
+  blob.insert(blob.end(), key.x.begin(), key.x.end());
+  blob.insert(blob.end(), key.y.begin(), key.y.end());
+  if (priv) blob.insert(blob.end(), key.d.begin(), key.d.end());
+  CFDataRef data = CFDataCreate(kCFAllocatorDefault, blob.data(), blob.size());
+  CFMutableDictionaryRef attrs = KeyAttrs(*key.curve, priv);
+  CFErrorRef error = nullptr;
+  SecKeyRef sec = SecKeyCreateWithData(data, attrs, &error);
+  if (error) CFRelease(error);
+  CFRelease(data);
+  CFRelease(attrs);
+  Wipe(&blob);
+  return sec;
+}
+bool SamePublic(SecKeyRef priv, const ec::EcKey& key) {
+  SecKeyRef pub = SecKeyCopyPublicKey(priv);
+  if (!pub) return false;
+  CFErrorRef error = nullptr;
+  CFDataRef data = SecKeyCopyExternalRepresentation(pub, &error);
+  if (error) CFRelease(error);
+  const size_t n = key.curve->size;
+  bool ok = data && size_t(CFDataGetLength(data)) == 1 + 2 * n && CFDataGetBytePtr(data)[0] == 0x04 &&
+      memcmp(CFDataGetBytePtr(data) + 1, key.x.data(), n) == 0 &&
+      memcmp(CFDataGetBytePtr(data) + 1 + n, key.y.data(), n) == 0;
+  if (data) CFRelease(data);
+  CFRelease(pub);
+  return ok;
+}
+SecKeyAlgorithm DigestAlgorithm(HashAlgorithm hash) {
+  switch (hash) {
+    case HashAlgorithm::Sha1: return kSecKeyAlgorithmECDSASignatureDigestRFC4754SHA1;
+    case HashAlgorithm::Sha256: return kSecKeyAlgorithmECDSASignatureDigestRFC4754SHA256;
+    case HashAlgorithm::Sha384: return kSecKeyAlgorithmECDSASignatureDigestRFC4754SHA384;
+    case HashAlgorithm::Sha512: return kSecKeyAlgorithmECDSASignatureDigestRFC4754SHA512;
+  }
+  return kSecKeyAlgorithmECDSASignatureDigestRFC4754SHA256;
+}
+}  // namespace
+
+bool AesCbc(const Bytes& key, const Bytes& iv, const Bytes& input, bool encrypt, Bytes* out) {
+  if (!AesKey(key) || iv.size() != 16) return false;
+  out->assign(input.size() + 16, 0);
+  size_t moved = 0;
+  const uint8_t empty = 0;
+  CCCryptorStatus status = CCCrypt(encrypt ? kCCEncrypt : kCCDecrypt, kCCAlgorithmAES, kCCOptionPKCS7Padding,
+      key.data(), key.size(), iv.data(), input.empty() ? &empty : input.data(), input.size(),
+      out->data(), out->size(), &moved);
+  if (status != kCCSuccess) return false;
+  out->resize(moved);
+  return true;
+}
+
+bool AesGcm(const Bytes& key, const Bytes& iv, const Bytes& aad, size_t tagBytes,
+            const Bytes& input, bool encrypt, Bytes* out) {
+  if (!AesKey(key) || iv.size() != 12 || tagBytes < 4 || tagBytes > 16) return false;
+  if (!encrypt && input.size() < tagBytes) return false;
+  const size_t body = encrypt ? input.size() : input.size() - tagBytes;
+  Bytes tag = encrypt ? Bytes(tagBytes, 0) : Bytes(input.begin() + ptrdiff_t(body), input.end());
+  Bytes result(body ? body : 1, 0);
+  uint8_t sink = 0;
+  const uint8_t empty = 0;
+  const void* source = body ? input.data() : &empty;
+  void* target = body ? result.data() : &sink;
+  CCCryptorStatus status = encrypt
+      ? CCCryptorGCMOneshotEncrypt(kCCAlgorithmAES, key.data(), key.size(), iv.data(), iv.size(),
+            aad.empty() ? nullptr : aad.data(), aad.size(), source, body, target, tag.data(), tag.size())
+      : CCCryptorGCMOneshotDecrypt(kCCAlgorithmAES, key.data(), key.size(), iv.data(), iv.size(),
+            aad.empty() ? nullptr : aad.data(), aad.size(), source, body, target, tag.data(), tag.size());
+  if (status != kCCSuccess) return false;
+  result.resize(body);
+  if (encrypt) result.insert(result.end(), tag.begin(), tag.end());
+  *out = std::move(result);
+  return true;
+}
+
+bool Hmac(HashAlgorithm hash, const Bytes& key, const Bytes& data, Bytes* out) {
+  const CCHmacAlgorithm algs[] = {kCCHmacAlgSHA1, kCCHmacAlgSHA256, kCCHmacAlgSHA384, kCCHmacAlgSHA512};
+  const size_t sizes[] = {20, 32, 48, 64};
+  const unsigned index = unsigned(hash);
+  if (index > 3) return false;
+  out->assign(sizes[index], 0);
+  const uint8_t empty = 0;
+  CCHmac(algs[index], key.empty() ? &empty : key.data(), key.size(),
+         data.empty() ? &empty : data.data(), data.size(), out->data());
+  return true;
+}
+
+bool EcGenerate(const ec::EcCurve& curve, bool ecdh, ec::EcKey* out) {
+  (void)ecdh;
+  if (!CurveBits(curve)) return false;
+  CFMutableDictionaryRef attrs = KeyAttrs(curve, true);
+  CFErrorRef error = nullptr;
+  SecKeyRef priv = SecKeyCreateRandomKey(attrs, &error);
+  if (error) CFRelease(error);
+  CFRelease(attrs);
+  if (!priv) return false;
+  error = nullptr;
+  CFDataRef blob = SecKeyCopyExternalRepresentation(priv, &error);
+  if (error) CFRelease(error);
+  CFRelease(priv);
+  const size_t n = curve.size;
+  if (!blob || size_t(CFDataGetLength(blob)) != 1 + 3 * n || CFDataGetBytePtr(blob)[0] != 0x04) {
+    if (blob) CFRelease(blob);
+    return false;
+  }
+  const UInt8* bytes = CFDataGetBytePtr(blob);
+  out->curve = &curve;
+  out->x.assign(bytes + 1, bytes + 1 + n);
+  out->y.assign(bytes + 1 + n, bytes + 1 + 2 * n);
+  out->d.assign(bytes + 1 + 2 * n, bytes + 1 + 3 * n);
+  CFRelease(blob);
+  return true;
+}
+
+bool EcValidate(const ec::EcKey& key, bool ecdh) {
+  (void)ecdh;
+  if (!key.curve) return false;
+  SecKeyRef pub = ImportPoint(key, false);
+  if (!pub) return false;
+  CFRelease(pub);
+  if (key.d.empty()) return true;
+  SecKeyRef priv = ImportPoint(key, true);
+  if (!priv) return false;
+  bool ok = SamePublic(priv, key);
+  CFRelease(priv);
+  return ok;
+}
+
+bool EcdsaSign(const ec::EcKey& key, HashAlgorithm hash, const Bytes& message, Bytes* out) {
+  DigestBytes digest;
+  SecKeyRef priv = ImportPoint(key, true);
+  if (!priv || !ComputeDigest(hash, message.data(), message.size(), &digest)) {
+    if (priv) CFRelease(priv);
+    return false;
+  }
+  CFDataRef hashed = CFDataCreate(kCFAllocatorDefault, digest.data, digest.size);
+  CFErrorRef error = nullptr;
+  CFDataRef sig = SecKeyCreateSignature(priv, DigestAlgorithm(hash), hashed, &error);
+  if (error) CFRelease(error);
+  CFRelease(hashed);
+  CFRelease(priv);
+  const size_t n = key.curve->size;
+  if (!sig || size_t(CFDataGetLength(sig)) != 2 * n) {
+    if (sig) CFRelease(sig);
+    return false;
+  }
+  const UInt8* bytes = CFDataGetBytePtr(sig);
+  out->assign(bytes, bytes + 2 * n);
+  CFRelease(sig);
+  return true;
+}
+
+bool EcdsaVerify(const ec::EcKey& key, HashAlgorithm hash, const Bytes& message,
+                 const Bytes& signature, bool* valid) {
+  DigestBytes digest;
+  ec::EcKey pub{key.curve, key.x, key.y, {}};
+  SecKeyRef sec = ImportPoint(pub, false);
+  if (!sec || !ComputeDigest(hash, message.data(), message.size(), &digest)) {
+    if (sec) CFRelease(sec);
+    return false;
+  }
+  if (signature.size() != 2 * key.curve->size) {
+    CFRelease(sec);
+    *valid = false;
+    return true;
+  }
+  CFDataRef hashed = CFDataCreate(kCFAllocatorDefault, digest.data, digest.size);
+  CFDataRef sig = CFDataCreate(kCFAllocatorDefault, signature.data(), signature.size());
+  CFErrorRef error = nullptr;
+  *valid = SecKeyVerifySignature(sec, DigestAlgorithm(hash), hashed, sig, &error);
+  if (error) CFRelease(error);
+  CFRelease(sig);
+  CFRelease(hashed);
+  CFRelease(sec);
+  return true;
+}
+
+bool EcdhSecret(const ec::EcKey& privateKey, const ec::EcKey& publicKey, Bytes* out) {
+  if (!privateKey.curve || privateKey.curve != publicKey.curve) return false;
+  SecKeyRef mine = ImportPoint(privateKey, true);
+  ec::EcKey peer{publicKey.curve, publicKey.x, publicKey.y, {}};
+  SecKeyRef theirs = ImportPoint(peer, false);
+  if (!mine || !theirs) {
+    if (mine) CFRelease(mine);
+    if (theirs) CFRelease(theirs);
+    return false;
+  }
+  CFMutableDictionaryRef params = CFDictionaryCreateMutable(
+      kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+  CFErrorRef error = nullptr;
+  CFDataRef secret = SecKeyCopyKeyExchangeResult(
+      mine, kSecKeyAlgorithmECDHKeyExchangeStandard, theirs, params, &error);
+  if (error) CFRelease(error);
+  CFRelease(params);
+  CFRelease(mine);
+  CFRelease(theirs);
+  const size_t n = privateKey.curve->size;
+  if (!secret || size_t(CFDataGetLength(secret)) > n) {
+    if (secret) CFRelease(secret);
+    return false;
+  }
+  const size_t got = size_t(CFDataGetLength(secret));
+  out->assign(n - got, 0);
+  out->insert(out->end(), CFDataGetBytePtr(secret), CFDataGetBytePtr(secret) + got);
+  CFRelease(secret);
+  return true;
+}
+}  // namespace ruyijs::web_crypto
+
+#else
 #include "web_crypto/cng_backend.h"
 #include <windows.h>
 #include <bcrypt.h>
@@ -176,3 +436,5 @@ bool EcdhSecret(const ec::EcKey& privateKey, const ec::EcKey& publicKey, Bytes* 
   return ok;
 }
 }  // namespace ruyijs::web_crypto
+
+#endif

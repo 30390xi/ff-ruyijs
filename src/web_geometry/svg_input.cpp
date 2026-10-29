@@ -1,6 +1,7 @@
 #include "web_geometry/svg.h"
 #include "domain/styling/css_numeric_value.h"
 #include "domain/geometry/svg_transform.h"
+#include <cmath>
 
 namespace ruyijs::web_geometry {
 std::string SvgAttribute(const SvgInput& input, const char* name) {

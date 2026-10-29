@@ -5,6 +5,7 @@
 
 #include "js/ArrayBuffer.h"
 #include "js/Realm.h"
+#include <cmath>
 
 namespace ruyijs::web_gpu {
 namespace {

@@ -1,6 +1,7 @@
 // Canvas drawing resources: state lives only in these realm-owned instances.
 #include "web_canvas/internal.h"
 #include "js/Realm.h"
+#include <cmath>
 
 namespace ruyijs::web_canvas {
 const JSClass kGradientClass = {"CanvasGradient", JSCLASS_HAS_RESERVED_SLOTS(1)};

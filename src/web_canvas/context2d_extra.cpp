@@ -4,6 +4,7 @@
 #include "web_media/image_codec.h"
 #include "js/ForOfIterator.h"
 #include "js/Realm.h"
+#include <cmath>
 
 namespace ruyijs::web_canvas {
 namespace {

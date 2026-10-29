@@ -1,3 +1,10 @@
+#ifndef _WIN32
+// RUYIJS_POSIX_STUB
+#include "web_media/image_codec.h"
+namespace ruyijs::web_media {
+void ImageColorTransform(domain::web_media::ImageFrame*) {}
+}
+#else
 // Match the browser's sRGB-to-display transform using the actual system profile.
 #define NOMINMAX
 #include <windows.h>
@@ -19,3 +26,5 @@ void ImageColorTransform(domain::web_media::ImageFrame* frame) {
   ruyijs_image_srgb_to_profile(frame->pixels.data(),frame->pixels.size(),profile.data(),profile.size());
 }
 }
+
+#endif

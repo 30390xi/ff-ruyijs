@@ -2,6 +2,7 @@
 #include "web_canvas/internal.h"
 #include "js/Realm.h"
 #include "runtime/native_constructor_trace.h"
+#include <cmath>
 
 namespace ruyijs::web_canvas {
 const JSClass kPath2DClass = {"Path2D", JSCLASS_HAS_RESERVED_SLOTS(kContextSlotCount)};

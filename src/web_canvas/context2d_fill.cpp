@@ -3,6 +3,7 @@
 // a second owner.
 #include "web_canvas/internal.h"
 #include "web_canvas/path_geometry.h"
+#include <cmath>
 
 namespace ruyijs::web_canvas {
 namespace {

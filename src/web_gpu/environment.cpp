@@ -7,6 +7,7 @@
 
 #include "js/Array.h"
 #include "js/PropertyAndElement.h"
+#include <cmath>
 
 namespace ruyijs::web_gpu {
 namespace {

@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "web_canvas/raster_clip.h"
+#include <cmath>
 
 namespace ruyijs::web_canvas::raster {
 namespace {

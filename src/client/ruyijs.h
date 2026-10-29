@@ -4,7 +4,7 @@
 #ifdef _WIN32
 #define RUYIJS_API __declspec(dllexport)
 #else
-#define RUYIJS_API
+#define RUYIJS_API __attribute__((visibility("default")))
 #endif
 #ifdef __cplusplus
 extern "C" {

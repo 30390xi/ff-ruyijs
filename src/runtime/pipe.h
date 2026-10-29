@@ -43,6 +43,7 @@ class Pipe final {
   bool Transfer(void* data, unsigned length, bool writing);
   void* handle_ = nullptr;
   PipeAsync* async_ = nullptr;
+  std::string bound_name_;
 };
 }
 #endif

@@ -1,3 +1,13 @@
+#ifndef _WIN32
+// RUYIJS_POSIX_STUB: animation compose stays on the Windows WIC path until Core graphics is ported.
+#include "image_animation.h"
+namespace ruyijs::web_media {
+bool ComposeImageAnimation(const std::string&, const ImageAnimation&, uint32_t, uint32_t,
+                           domain::web_media::ImageData*) {
+  return false;
+}
+}
+#else
 // Shared WebMedia canvas composition; the codec supplies actual frame pixels.
 #include "image_animation.h"
 #include <algorithm>
@@ -54,3 +64,4 @@ bool ComposeImageAnimation(const std::string& mime,const ImageAnimation& input,u
   return true;
 }
 }
+#endif

@@ -30,18 +30,26 @@ class BuildPython(build_py):
         return sorted(set(outputs))
 
     def run(self):
-        if sys.platform != "win32" or platform.machine().lower() not in ("amd64", "x86_64"):
-            raise RuntimeError("ruyijs requires Windows x64 and a 64-bit Python installation")
-        if sys.maxsize <= 2 ** 32:
-            raise RuntimeError("ruyijs requires 64-bit Python")
+        tag = _platform_tag()
         super().run()
-        runtime = obtain_runtime(Path(__file__).resolve().parent)
+        project = Path(__file__).resolve().parent
         target = Path(self.build_lib) / "ruyijs/_runtime"
-        if target.exists():
-            validate(target)
-            if digest(target / "SHA256SUMS") != digest(runtime / "SHA256SUMS"):
-                raise ValueError(f"Build directory contains another runtime version: {target}")
+        if tag == "win_amd64":
+            runtime = obtain_runtime(project)
+            if target.exists():
+                validate(target)
+                if digest(target / "SHA256SUMS") != digest(runtime / "SHA256SUMS"):
+                    raise ValueError(f"Build directory contains another runtime version: {target}")
+            else:
+                shutil.copytree(runtime, target)
         else:
+            runtime = project / "dist"
+            if not (runtime / "js").is_file() or not (runtime / "libmozglue.dylib").is_file():
+                raise FileNotFoundError(
+                    "macOS arm64 wheel needs dist/js and dist/libmozglue.dylib "
+                    "from an aarch64-apple-darwin Firefox donor")
+            if target.exists():
+                shutil.rmtree(target)
             shutil.copytree(runtime, target)
         examples = Path(self.build_lib) / "ruyijs/examples"
         if examples.exists():
@@ -58,14 +66,25 @@ class BuildPython(build_py):
                 + readme.read_text(encoding="utf-8"), encoding="utf-8")
 
 
+def _platform_tag():
+    machine = platform.machine().lower()
+    if sys.maxsize <= 2 ** 32:
+        raise RuntimeError("ruyijs requires 64-bit Python")
+    if sys.platform == "win32" and machine in ("amd64", "x86_64"):
+        return "win_amd64"
+    if sys.platform == "darwin" and machine in ("arm64", "aarch64"):
+        return "macosx_26_0_arm64"
+    raise RuntimeError("ruyijs wheels are built for Windows x64 or macOS arm64")
+
+
 class PlatformWheel(bdist_wheel):
     def finalize_options(self):
         super().finalize_options()
         self.root_is_pure = False
-        self.plat_name = "win_amd64"
+        self.plat_name = _platform_tag()
 
     def get_tag(self):
-        return "py3", "none", "win_amd64"
+        return "py3", "none", _platform_tag()
 
 
 setup(distclass=PlatformDistribution,

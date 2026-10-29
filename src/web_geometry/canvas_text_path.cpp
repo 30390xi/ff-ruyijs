@@ -1,3 +1,15 @@
+#ifndef _WIN32
+// RUYIJS_POSIX_STUB
+
+#include "web_geometry/font_backend.h"
+namespace ruyijs::web_geometry {
+bool SystemFonts::BuildCanvasTextPath(const std::u16string& text, const FontInput&, CanvasTextPath* result) {
+  if (!result) return false;
+  *result = {};
+  return text.empty();
+}
+}
+#else
 #include "web_geometry/font_backend.h"
 
 #include <d2d1.h>
@@ -151,3 +163,5 @@ bool SystemFonts::BuildCanvasTextPath(const std::u16string& text, const FontInpu
   return true;
 }
 }  // namespace ruyijs::web_geometry
+
+#endif

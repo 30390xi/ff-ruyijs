@@ -1,4 +1,5 @@
 #include "execution_scheduling/model_internal.h"
+#include <cmath>
 
 namespace ruyijs::execution_scheduling {
 Model::~Model() noexcept { delete impl_; }

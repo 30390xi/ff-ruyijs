@@ -2,20 +2,103 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#ifdef _WIN32
 #include <windows.h>
 #include <dwrite.h>
 #include <hb.h>
 #include <hb-ot.h>
 #include <wrl/client.h>
+#endif
 #include <algorithm>
+#include <array>
 #include <string>
 #include <memory>
 #include <unordered_map>
 #include <vector>
 #include "web_geometry/system_font.h"
-
+#ifdef _WIN32
 namespace ruyijs::web_geometry {
 template<class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
+#else
+#include <hb.h>
+#include <hb-ot.h>
+#include <cstdint>
+using HRESULT = long;
+using BOOL = int;
+using UINT32 = uint32_t;
+using UINT16 = uint16_t;
+using FLOAT = float;
+constexpr BOOL FALSE = 0;
+constexpr BOOL TRUE = 1;
+inline bool SUCCEEDED(HRESULT value) { return value >= 0; }
+inline bool FAILED(HRESULT value) { return value < 0; }
+inline uint32_t _byteswap_ulong(uint32_t value) { return __builtin_bswap32(value); }
+struct DWRITE_FONT_METRICS {
+  uint16_t designUnitsPerEm = 0;
+  uint16_t ascent = 0;
+  uint16_t descent = 0;
+  int16_t lineGap = 0;
+  uint16_t capHeight = 0;
+  uint16_t xHeight = 0;
+  int16_t underlinePosition = 0;
+  uint16_t underlineThickness = 0;
+  int16_t strikethroughPosition = 0;
+  uint16_t strikethroughThickness = 0;
+};
+struct DWRITE_GLYPH_METRICS {
+  int32_t leftSideBearing = 0;
+  uint32_t advanceWidth = 0;
+  int32_t rightSideBearing = 0;
+  int32_t topSideBearing = 0;
+  uint32_t advanceHeight = 0;
+  int32_t bottomSideBearing = 0;
+  int32_t verticalOriginY = 0;
+};
+struct IDWriteFont {};
+struct IDWriteFontFamily {};
+struct IDWriteFactory {};
+struct IDWriteFontCollection {};
+struct IDWriteLocalizedStrings {};
+// Owns one CTFontRef stored as void* so this header stays free of Core Text.
+// AddRef/Release are no-ops: HarfBuzz table blobs must not free a face that
+// a ComPtr still owns. Copies of that ComPtr share one face pointer.
+struct IDWriteFontFace {
+  explicit IDWriteFontFace(const void* font);
+  ~IDWriteFontFace();
+  IDWriteFontFace(const IDWriteFontFace&) = delete;
+  IDWriteFontFace& operator=(const IDWriteFontFace&) = delete;
+  void GetMetrics(DWRITE_FONT_METRICS* metrics) const;
+  HRESULT GetGlyphIndices(const uint32_t* codepoints, uint32_t count, uint16_t* glyphs) const;
+  HRESULT GetDesignGlyphMetrics(const uint16_t* glyphs, uint32_t count, DWRITE_GLYPH_METRICS* metrics,
+                                BOOL sideways = FALSE) const;
+  HRESULT GetGdiCompatibleGlyphMetrics(FLOAT emSize, FLOAT pixelsPerDip, const void* transform,
+                                       BOOL useGdiNatural, const uint16_t* glyphs, UINT32 count,
+                                       DWRITE_GLYPH_METRICS* metrics, BOOL sideways) const;
+  HRESULT TryGetFontTable(UINT32 tag, const void** data, UINT32* size, void** context,
+                          BOOL* exists) const;
+  void ReleaseFontTable(void* context) const;
+  void AddRef() const;
+  void Release() const;
+  void* CoreFont() const;
+
+ private:
+  void* font_ = nullptr;
+};
+namespace ruyijs::web_geometry {
+template<class T>
+class ComPtr {
+ public:
+  ComPtr() = default;
+  T* Get() const { return pointer_.get(); }
+  T* operator->() const { return pointer_.get(); }
+  explicit operator bool() const { return static_cast<bool>(pointer_); }
+  void Reset() { pointer_.reset(); }
+  void Attach(T* raw) { pointer_.reset(raw); }
+
+ private:
+  std::shared_ptr<T> pointer_;
+};
+#endif
 struct SelectedFont {
   ComPtr<IDWriteFontFace> face;
   std::wstring family;

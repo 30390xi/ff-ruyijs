@@ -16,14 +16,32 @@ class Donor:
         self.shell = self.obj / "js/src/shell"
         self.backend_path = self.shell / "backend.mk"
         self.backend = self.backend_path.read_text(encoding="utf-8")
-        required = {"JS_STANDALONE": "1", "OS_ARCH": "WINNT"}
-        for name, expected in required.items():
-            if str(self.substs.get(name)) != expected:
-                raise ValueError(f"donor requires {name}={expected}")
-        if "x86_64" not in str(self.substs.get("target", "")):
-            raise ValueError("donor must target x86_64 Windows")
-        if "-MD" not in self.flags("COMPUTED_CXXFLAGS"):
-            raise ValueError("donor must use the shared MSVC CRT (-MD)")
+        if str(self.substs.get("JS_STANDALONE")) != "1":
+            raise ValueError("donor requires JS_STANDALONE=1")
+        self.os_arch = str(self.substs.get("OS_ARCH", ""))
+        self.target_triple = str(self.substs.get("target", ""))
+        if self.os_arch == "WINNT":
+            if "x86_64" not in self.target_triple:
+                raise ValueError("donor must target x86_64 Windows")
+            if "-MD" not in self.flags("COMPUTED_CXXFLAGS"):
+                raise ValueError("donor must use the shared MSVC CRT (-MD)")
+            self.windows = True
+            self.shell_name = "js.exe"
+            self.glue_name = "mozglue.dll"
+            self.rust_target = "x86_64-pc-windows-msvc"
+            self.object_suffix = ".obj"
+            self.static_suffix = ".lib"
+        elif self.os_arch == "Darwin":
+            if "aarch64" not in self.target_triple and "arm64" not in self.target_triple:
+                raise ValueError("mac donor must target aarch64")
+            self.windows = False
+            self.shell_name = "js"
+            self.glue_name = "libmozglue.dylib"
+            self.rust_target = "aarch64-apple-darwin"
+            self.object_suffix = ".o"
+            self.static_suffix = ".a"
+        else:
+            raise ValueError(f"donor OS_ARCH is not supported: {self.os_arch}")
 
     def values(self, variable):
         pattern = rf"^{re.escape(variable)}\s*(?:\+=|:=|=)\s*(.*)$"
@@ -49,12 +67,28 @@ class Donor:
                 for key in ("STATIC_LIBS", "SHARED_LIBS")
                 for item in self.flags(key)]
 
+    def shell_list(self):
+        # Windows donors publish js_exe.list. Firefox 159's Mac shell publishes js.list.
+        preferred = self.shell / "js_exe.list"
+        if preferred.is_file():
+            return preferred
+        alternate = self.shell / "js.list"
+        if alternate.is_file():
+            return alternate
+        raise ValueError("donor shell object list is missing")
+
     def objects(self):
-        text = (self.shell / "js_exe.list").read_text(encoding="utf-8")
+        text = self.shell_list().read_text(encoding="utf-8")
         return [(self.shell / line.strip().strip('"')).resolve()
                 for line in text.splitlines() if line.strip()]
 
     def libpaths(self, vs_root=None):
+        if not self.windows:
+            result = []
+            for value in self.substs.get("HOST_LINKER_LIBPATHS") or []:
+                text = str(value).strip("'\"")
+                result.append(text if text.startswith("-L") else "-L" + text)
+            return result
         result = []
         for value in self.substs["HOST_LINKER_LIBPATHS"]:
             path = value.split(":", 1)[1].strip("'\"")
@@ -62,6 +96,8 @@ class Donor:
         return result
 
     def include(self, vs_root=None):
+        if not self.windows:
+            return ""
         return ";".join(self.remap_vs(path, vs_root)
                         for path in self.substs["INCLUDE"].split(";"))
 
@@ -76,6 +112,6 @@ class Donor:
         return (Path(vs_root) / normalized.split(marker, 1)[1]).as_posix()
 
     def source_inputs(self):
-        return [self.config_path, self.backend_path, self.shell / "js_exe.list",
+        return [self.config_path, self.backend_path, self.shell_list(),
                 self.shell / "Unified_cpp_js_src_shell0.cpp",
                 self.obj / "js/src/js-confdefs.h", self.src / "js/src/shell/js.cpp"]

@@ -3,6 +3,7 @@
 #include "web_geometry/font_config.h"
 #include <cstdlib>
 #include <string>
+#include <cmath>
 
 namespace ruyijs::web_geometry {
 bool BoxText(State& s, const document_model::LayoutNodeSource& source, box::BoxNode* node) {

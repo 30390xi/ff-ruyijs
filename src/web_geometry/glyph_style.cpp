@@ -1,3 +1,17 @@
+#ifndef _WIN32
+// RUYIJS_POSIX_STUB
+
+#include "web_geometry/glyph_mask.h"
+namespace ruyijs::web_geometry {
+float SystemTextGamma() { return 1.8f; }
+float SystemTextContrast() { return 1.0f; }
+GlyphRenderStyle GlyphStyle(IDWriteFontFace*, float size) {
+  GlyphRenderStyle style;
+  style.em = size;
+  return style;
+}
+}
+#else
 // SkScalerContext_DW's choice of rendering mode, reduced to the case the canvas
 // asks for: a grayscale A8 mask, normal hinting, no embedded bitmaps. The
 // donor's bitmap branches therefore collapse, leaving the size test, the
@@ -123,3 +137,5 @@ GlyphRenderStyle GlyphStyle(IDWriteFontFace* face, float size) {
   return style;
 }
 }  // namespace ruyijs::web_geometry
+
+#endif

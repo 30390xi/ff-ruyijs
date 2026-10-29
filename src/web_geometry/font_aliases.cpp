@@ -1,3 +1,15 @@
+#ifndef _WIN32
+// RUYIJS_POSIX_STUB
+
+#include "web_geometry/font_backend.h"
+namespace ruyijs::web_geometry {
+const FontAliases& FontCollection::Aliases() {
+  static FontAliases empty;
+  return empty;
+}
+ComPtr<IDWriteFont> AliasFace(const std::vector<ComPtr<IDWriteFont>>&, unsigned, bool) { return {}; }
+}
+#else
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -101,3 +113,5 @@ ComPtr<IDWriteFont> AliasFace(const std::vector<ComPtr<IDWriteFont>>& faces, uns
   return best;
 }
 }
+
+#endif
