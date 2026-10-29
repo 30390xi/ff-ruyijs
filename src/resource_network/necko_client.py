@@ -11,29 +11,44 @@ TEXT_LIMIT = 65536
 BODY_LIMIT = 8 * 1024 * 1024
 
 
+def _packaged_xpcshell():
+    try:
+        from ruyijs._runtime_paths import get_runtime_path
+    except Exception:
+        return None
+    candidate = get_runtime_path() / "dist" / "necko" / "xpcshell"
+    return candidate if candidate.is_file() else None
+
+
 def _donor_paths():
     script_env = os.environ.get("RUYIJS_NECKO_SCRIPT")
     binary_env = os.environ.get("RUYIJS_XPCSHELL")
     repo = None
     marker = Path("src") / "resource_network" / "necko_fetch.js"
-    for parent in Path(__file__).resolve().parents:
+    here = Path(__file__).resolve().parent
+    for parent in here.parents:
         if (parent / marker).is_file():
             repo = parent
             break
+    sibling = here / "necko_fetch.js"
     if script_env:
         script = Path(script_env)
     elif repo is not None:
         script = repo / marker
+    elif sibling.is_file():
+        script = sibling
     else:
         raise NeckoError("Necko donor script was not found")
     if binary_env:
         binary = Path(binary_env)
-    elif repo is not None:
-        binary = (
-            repo.parent / "firefox-159" / "obj-necko" / "dist" / "bin" / "xpcshell"
-        )
     else:
-        raise NeckoError("Necko donor xpcshell was not found")
+        packaged = _packaged_xpcshell()
+        if packaged is not None:
+            binary = packaged
+        elif repo is not None:
+            binary = repo.parent / "firefox-159" / "obj-necko" / "dist" / "bin" / "xpcshell"
+        else:
+            raise NeckoError("Necko donor xpcshell was not found")
     return binary, script
 
 

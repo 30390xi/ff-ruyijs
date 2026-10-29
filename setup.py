@@ -24,9 +24,10 @@ class PlatformDistribution(Distribution):
 class BuildPython(build_py):
     def get_outputs(self, include_bytecode=True):
         outputs = list(super().get_outputs(include_bytecode=include_bytecode))
-        examples = Path(self.build_lib) / "ruyijs/examples"
-        if examples.exists():
-            outputs.extend(str(path) for path in examples.rglob("*") if path.is_file())
+        for relative in ("ruyijs/examples", "ruyijs_necko", "necko"):
+            folder = Path(self.build_lib) / relative
+            if folder.exists():
+                outputs.extend(str(path) for path in folder.rglob("*") if path.is_file())
         return sorted(set(outputs))
 
     def run(self):
@@ -48,9 +49,20 @@ class BuildPython(build_py):
                 raise FileNotFoundError(
                     "macOS arm64 wheel needs dist/js and dist/libmozglue.dylib "
                     "from an aarch64-apple-darwin Firefox donor")
+            for name in ("js", "libmozglue.dylib", "libruyijs_client.dylib"):
+                if not (runtime / name).is_file():
+                    raise FileNotFoundError(f"macOS arm64 wheel needs dist/{name}")
             if target.exists():
                 shutil.rmtree(target)
-            shutil.copytree(runtime, target)
+            target.mkdir(parents=True)
+            shell_dest = target / "dist"
+            shell_dest.mkdir(parents=True)
+            for name in ("js", "libmozglue.dylib", "libruyijs_client.dylib"):
+                shutil.copy2(runtime / name, shell_dest / name)
+            from macos_runtime import donor_bin, stage_necko
+            stage_necko(target / "dist" / "necko", donor_bin(project),
+                        project / "src/resource_network/necko_fetch.js")
+            _install_darwin_helper(Path(self.build_lib), project)
         examples = Path(self.build_lib) / "ruyijs/examples"
         if examples.exists():
             shutil.rmtree(examples)
@@ -64,6 +76,25 @@ class BuildPython(build_py):
                 "(`python -m ruyijs.examples datadome`).\n"
                 "> Offline replay and device-check scripts and their captured data are not distributed.\n\n"
                 + readme.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+
+def _install_darwin_helper(build_lib, project):
+    source = project / "src/resource_network"
+    mapping = {
+        build_lib / "ruyijs_necko/__init__.py": source / "necko_ruyi_init.py",
+        build_lib / "ruyijs_necko/timing.py": source / "necko_timing.py",
+        build_lib / "ruyijs_necko/oneshot.py": source / "necko_oneshot.py",
+        build_lib / "necko/client.py": source / "necko_client.py",
+        build_lib / "necko/adapters.py": source / "necko_adapters.py",
+        build_lib / "necko/__init__.py": source / "necko_pkg_init.py",
+        build_lib / "necko/necko_fetch.js": source / "necko_fetch.js",
+    }
+    for dest, src in mapping.items():
+        if not src.is_file():
+            raise FileNotFoundError(src)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(src.read_bytes())
 
 
 def _platform_tag():

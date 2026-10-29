@@ -20,7 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = []
+dependencies = ["requests", "brotli", "zstandard"]
 
 [tool.setuptools]
 packages = ["ruyijs"]

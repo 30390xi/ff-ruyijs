@@ -20,6 +20,7 @@
 !/tools/binding_order.py
 !/tools/build.py
 !/tools/bootstrap_macos_helper.py
+!/tools/macos_runtime.py
 !/tools/client.py
 !/tools/compression_native.py
 !/tools/donor.py

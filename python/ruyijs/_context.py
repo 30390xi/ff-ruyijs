@@ -5,6 +5,7 @@ import math
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -96,6 +97,12 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
                       get_runtime_path() / "dist" / shell_filename())
         if not self.shell.is_file():
             raise FileNotFoundError(f"ruyijs shell does not exist: {self.shell}")
+        if sys.platform == "darwin" and not child_environment.get("RUYIJS_NECKO_PYTHON"):
+            runtime_root = self.shell.parent.parent
+            bundled = runtime_root / "vendor" / "necko-derived" / "python" / "bin" / "python3"
+            plain = runtime_root / "vendor" / "necko-derived" / "python" / "python3"
+            if not bundled.is_file() and not plain.is_file():
+                child_environment["RUYIJS_NECKO_PYTHON"] = sys.executable
         _prefer_bundled_crt(self.shell)
         try:
             self._pipe = Pipe()

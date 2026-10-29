@@ -1,14 +1,45 @@
 #ifndef _WIN32
-// RUYIJS_POSIX_STUB
-
+// Firefox's macOS single-face list. The donor default in modules/libpref/init/all.js
+// is font.single-face-list = Osaka-Mono:Osaka, resolved by
+// gfxMacPlatformFontList::InitAliasesForSingleFaceList. A name is recorded only
+// when Core Text's PostScript name and family both match that pair.
 #include "web_geometry/font_backend.h"
+
+#include <CoreText/CoreText.h>
+
 namespace ruyijs::web_geometry {
+namespace {
+bool Same(CFStringRef value, const char* text) {
+  if (!value || !text) return false;
+  CFStringRef expected = CFStringCreateWithCString(kCFAllocatorDefault, text, kCFStringEncodingUTF8);
+  const bool match = expected && CFStringCompare(value, expected, kCFCompareCaseInsensitive) == 0;
+  if (expected) CFRelease(expected);
+  return match;
+}
+bool SingleFace(const char* postscript, const char* family) {
+  CFStringRef requested = CFStringCreateWithCString(kCFAllocatorDefault, postscript, kCFStringEncodingUTF8);
+  if (!requested) return false;
+  CTFontRef font = CTFontCreateWithName(requested, 0, nullptr);
+  CFRelease(requested);
+  if (!font) return false;
+  CFStringRef actual_ps = CTFontCopyPostScriptName(font);
+  CFStringRef actual_family = CTFontCopyFamilyName(font);
+  const bool match = Same(actual_ps, postscript) && Same(actual_family, family);
+  if (actual_ps) CFRelease(actual_ps);
+  if (actual_family) CFRelease(actual_family);
+  CFRelease(font);
+  return match;
+}
+}  // namespace
+
 const FontAliases& FontCollection::Aliases() {
-  static FontAliases empty;
-  return empty;
+  if (aliases) return *aliases;
+  aliases = std::make_unique<FontAliases>();
+  if (SingleFace("Osaka-Mono", "Osaka")) aliases->substitutes[L"osaka-mono"] = L"Osaka";
+  return *aliases;
 }
 ComPtr<IDWriteFont> AliasFace(const std::vector<ComPtr<IDWriteFont>>&, unsigned, bool) { return {}; }
-}
+}  // namespace ruyijs::web_geometry
 #else
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this

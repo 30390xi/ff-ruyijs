@@ -1,9 +1,27 @@
 #ifndef _WIN32
-// RUYIJS_POSIX_STUB
+// The display ICC comes from ColorSync. qcms, already linked from Firefox's
+// tree, performs the pixel conversion.
 #include "web_media/image_codec.h"
+
+#include <CoreGraphics/CoreGraphics.h>
+
+extern "C" bool ruyijs_image_srgb_to_profile(uint8_t*, size_t, const uint8_t*, size_t);
+
 namespace ruyijs::web_media {
-void ImageColorTransform(domain::web_media::ImageFrame*) {}
+void ImageColorTransform(domain::web_media::ImageFrame* frame) {
+  if (!frame || frame->pixels.empty() || frame->pixels.size() > 16u * 1024u * 1024u) return;
+  CGColorSpaceRef space = CGDisplayCopyColorSpace(CGMainDisplayID());
+  if (!space) return;
+  CFDataRef profile = CGColorSpaceCopyICCData(space);
+  CGColorSpaceRelease(space);
+  if (!profile) return;
+  const auto* bytes = CFDataGetBytePtr(profile);
+  const CFIndex size = CFDataGetLength(profile);
+  if (bytes && size > 0 && size <= 16 * 1024 * 1024)
+    ruyijs_image_srgb_to_profile(frame->pixels.data(), frame->pixels.size(), bytes, size_t(size));
+  CFRelease(profile);
 }
+}  // namespace ruyijs::web_media
 #else
 // Match the browser's sRGB-to-display transform using the actual system profile.
 #define NOMINMAX

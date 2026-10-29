@@ -7,7 +7,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- macOS arm64 source build of the shell. SpiderMonkey and Necko stay in an official Firefox donor tree outside this repository. Maintainer steps, the verified HTTP/1.1 and HTTP/2 path, and the surfaces that are still empty are in `docs/macos.md` and `docs/macos.zh-CN.md`.
+- macOS arm64 source build of the shell. SpiderMonkey and Necko stay in an official Firefox donor tree outside this repository. Maintainer steps and the verified HTTP/1.1 and HTTP/2 path are in `docs/macos.md` and `docs/macos.zh-CN.md`.
+- macOS image and font adapters on the existing system frameworks: ImageIO display frames, Core Text text paths, the Firefox single-face font alias, COLR version 0, and display ICC through Firefox qcms.
+- A local macOS wheel lays the shell out at `_runtime/dist/js` and copies the donor xpcshell closure to `_runtime/dist/necko`. `requests`, `brotli`, and `zstandard` are package dependencies. `runtime.json` stores the archive size and sha256 and leaves the macOS URL empty.
 - `tools/bootstrap_macos_helper.py` creates the gitignored Necko helper venv with Python 3.12 and the packages `requests`, `brotli`, and `zstandard`. An existing venv is left in place.
 
 ### Changed

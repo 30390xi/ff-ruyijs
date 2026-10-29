@@ -1,6 +1,6 @@
 # macOS arm64
 
-This is the maintainer path for the macOS shell. Windows x64 still installs from the PyPI wheel. macOS does not: there is no macOS file in `runtime.json`, and `setup.py` only packs a wheel after a local `dist/js` and `dist/libmozglue.dylib` already exist.
+This is the maintainer path for the macOS shell. Windows x64 still installs from the PyPI wheel. macOS builds a local `macosx_26_0_arm64` wheel after `dist/js` and `dist/libmozglue.dylib` exist. `runtime.json` then records that archive's size and sha256. Its macOS URL stays empty, and this tree does not upload the wheel.
 
 The same facts are written in [macos.zh-CN.md](macos.zh-CN.md).
 
@@ -13,7 +13,7 @@ ruyijs on macOS is the outer shell. SpiderMonkey and Necko/NSS come from one off
 | `dist/js`, `dist/libmozglue.dylib` | SpiderMonkey standalone donor, then `tools/build.py` |
 | Necko/NSS, TLS, HTTP/2 | `xpcshell` from the browser donor |
 | Frame pipe, process launch, C ABI client | this repository |
-| Python helper venv | `vendor/necko-derived/python`, gitignored |
+| Python helper venv | `vendor/necko-derived/python`, gitignored. A wheel uses the Python that installed it |
 
 A maintainer checkout is two sibling directories:
 
@@ -24,7 +24,7 @@ firefox/                 official Firefox source, not part of ruyijs
 ff-ruyijs/               this repository
 ```
 
-The default xpcshell path is the parent of this repo plus `firefox-159/obj-necko/dist/bin/xpcshell`. Rename the Firefox directory or pass `RUYIJS_XPCSHELL`. The fetch script defaults to `src/resource_network/necko_fetch.js`, found by walking parents of the installed client. Override it with `RUYIJS_NECKO_SCRIPT`.
+The default xpcshell path is the parent of this repo plus `firefox-159/obj-necko/dist/bin/xpcshell`. Rename the Firefox directory or pass `RUYIJS_XPCSHELL`. An installed wheel looks for `dist/necko/xpcshell` inside the runtime before that donor path. The fetch script defaults to `src/resource_network/necko_fetch.js`, found by walking parents of the client, or to `necko_fetch.js` beside the installed client. Override it with `RUYIJS_NECKO_SCRIPT`.
 
 Pass the standalone objdir to `tools/build.py --donor-obj`. The matching environment variable is `RUYIJS_DONOR_OBJ`. Pass it for that build. Do not export it from a long-lived shell profile.
 
@@ -90,13 +90,13 @@ On Windows the same build copies only `oneshot.py`. If the Darwin venv is missin
 
 The shell binary is `dist/js`. Point examples at it with `RUYIJS_SHELL` set to that path, and put `python/` on `PYTHONPATH`. The client library is `libruyijs_client.dylib`.
 
-A local wheel, when you choose to build one, copies `dist/` and is tagged `macosx_26_0_arm64`. It is not published from `runtime.json`.
+A local wheel is tagged `macosx_26_0_arm64`. It places the shell at `_runtime/dist/js` and copies the donor xpcshell closure to `_runtime/dist/necko`. It is not uploaded. Regenerate the archive with `python3.12 -B tools/macos_runtime.py <zip-path>`, then store the printed size and sha256 in the `runtime.json` `macos` object and leave `url` empty.
 
 ## How a request moves
 
 The length-prefixed frame format is the same as Windows. On macOS the pipe is a Unix socket. The shell starts `python -I -B -m ruyijs_necko.oneshot`, and that process keeps one xpcshell for the session. The xpcshell owns TLS, HTTP/2, cookies, and redirects. `redirectionLimit` is 0, so a 3xx response is returned as the response. Python does not store cookies and does not follow redirects.
 
-Verified on this path: HTTP/1.1 and HTTP/2. A framed HTTPS check prints the status, the version code (`20` for HTTP/2), and the body length. HTTP/3 is not a verified macOS result. Do not add a second HTTP/3 implementation.
+Verified on this path: HTTP/1.1 and HTTP/2. A framed HTTPS check prints the status, the version code (`20` for HTTP/2), and the body length. The donor XUL contains neqo and the preference `network.http.http3.enable`. With the socket process left off, two requests to an HTTP/3 origin still return version 20. Turning the socket process on makes this xpcshell close the pipe and write no error. Do not add another HTTP/3 stack.
 
 ## System frameworks
 
@@ -110,27 +110,26 @@ POSIX changes stay on the non-Windows side of the existing `#ifndef _WIN32` spli
 
 - Unix-socket frames, worker `posix_spawn`, and the C ABI client.
 - Core Text font metrics and glyph masks.
-- ImageIO still images: PNG, JPEG, GIF, WebP, BMP, and ICO, first frame, premultiplied BGRA.
+- ImageIO still images: PNG, JPEG, GIF, WebP, BMP, and ICO, premultiplied BGRA. A multi-frame GIF uses ImageIO's already composited display frames.
 - SVG path bounds for M, L, C, Q, A, and Z.
 - WebCrypto SHA, AES-CBC, AES-GCM, HMAC, ECDSA, and ECDH. An ECDH parameter-dictionary failure returns false, and the caller surfaces `OperationError`.
 - Necko/NSS through the donor xpcshell. The Akamai example has passed with `init_real` set, over HTTP/2.
 
-CreepJS has passed, including `svg` and `canvas 2d`, on the shell built before the later crypto comment-only edits. Re-run it after a real relink.
+CreepJS passed again after the adapter relink, including `svg` and `canvas 2d`, with no failed section.
 
-## What is still empty
+## Known differences
 
-These POSIX entry points return false, return an empty table, or return a constant. They keep the `RUYIJS_POSIX_STUB` marker. CreepJS did not require them, so they are not part of this port:
+These surfaces now call the same system and Firefox code the donor uses. They are not a second image or font stack.
 
-| Surface | File | macOS behavior |
-| --- | --- | --- |
-| Animated image compose | `src/web_media/image_composition.cpp` | `ComposeImageAnimation` returns false |
-| GIF frame compose | `src/web_media/image_gif.cpp` | compose stays on the Windows path |
-| Image color transform | `src/web_media/image_color.cpp` | `ImageColorTransform` is empty |
-| Canvas text path | `src/web_geometry/canvas_text_path.cpp` | true only for empty text |
-| Font aliases | `src/web_geometry/font_aliases.cpp` | alias table is empty |
-| COLR glyph mask | `src/web_geometry/glyph_color.cpp` | returns false |
-| COLR palette | `src/web_geometry/glyph_palette.cpp` | returns false |
-| Glyph gamma and contrast | `src/web_geometry/glyph_style.cpp` | fixed gamma 1.8 and contrast 1.0 |
+| Surface | macOS behavior |
+| --- | --- |
+| Animated GIF | ImageIO display frames. Disposal is already applied, so a frame Windows clears to transparent can keep the background color. After decode, the repetition count is the GIF metadata value. |
+| APNG and animated WebP | ImageIO frames, then the shared blend. Scaling uses Core Graphics and leaves pixels premultiplied. |
+| Image color | The display ICC comes from `CGDisplayCopyColorSpace` and `CGColorSpaceCopyICCData`, then Firefox qcms. No profile leaves the pixels unchanged. |
+| Canvas text path | `CTFontCreatePathForGlyph`. `fillText` builds that path before the glyph mask. |
+| Font alias | `Osaka-Mono` maps to `Osaka` only when the PostScript name and the family both match. That is Firefox's single-face list, not a new table. |
+| COLR and CPAL | COLR version 0 and CPAL palette 0. Table bytes come from `CTFontCopyTable`. COLRv1 is not implemented. |
+| Glyph gamma | `SystemTextGamma` stays 1.8 and `SystemTextContrast` stays 1.0. `gasp` and `maxp` are readable. The mask does not invent a DirectWrite rendering mode. |
 
 `src/web_media/image_codec.cpp` and `src/web_crypto/digest_backend.cpp` are real ImageIO and CommonCrypto code. They are not stubs.
 
@@ -138,7 +137,7 @@ The DataDome example's homepage result is a server score. It is not a missing Ma
 
 ## What not to commit
 
-Do not commit the Firefox tree, either objdir, `dist/js`, the helper venv, cookies, tokens, proxy credentials, or response bodies. Do not add a macOS archive URL to `runtime.json` until a real archive exists and its sha256 is known.
+Do not commit the Firefox tree, either objdir, `dist/js`, the helper venv, the macOS runtime zip, cookies, tokens, proxy credentials, or response bodies. The macOS `runtime.json` object may store size and sha256. Leave its URL empty until a real download exists.
 
 ## Reporting a macOS issue
 

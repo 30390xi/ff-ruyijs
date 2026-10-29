@@ -170,6 +170,12 @@ bool FontCollection::Select(const FontInput& input, uint32_t codepoint, Selected
     if (cached) continue;
     bool synthetic = false;
     CTFontRef created = MakeFont(name, input.weight, input.italic, &synthetic);
+    if (!created) {
+      const auto& aliases = Aliases();
+      const auto found = aliases.substitutes.find(LowerAscii(name));
+      if (found != aliases.substitutes.end())
+        created = MakeFont(found->second, input.weight, input.italic, &synthetic);
+    }
     if (!created) continue;
     SelectedFont font;
     font.face.Attach(new IDWriteFontFace(created));

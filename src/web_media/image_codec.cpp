@@ -139,6 +139,15 @@ domain::web_media::ImageDecodeStatus DecodeImageBytes(const std::string& type,
 #ifndef _WIN32
   if (!ImageIoMime(type)) return Status::Unsupported;
   if (bytes.empty() || bytes.size() > domain::web_media::kEncodedImageLimit) return Status::InvalidData;
+  if (type == "image/gif") {
+    GifMetadata metadata;
+    if (!ReadGifMetadata(bytes, &metadata)) return Status::InvalidData;
+    if (metadata.frames > 1 || metadata.animated) {
+      if (!DecodeGifImage(bytes, width, height, output)) return Status::InvalidData;
+      output->repetitions = metadata.repetitions;
+      return Status::Ok;
+    }
+  }
   domain::web_media::ImageFrame pixels;
   if (!ImageIoFrame(bytes.data(), bytes.size(), width, height, &pixels)) return Status::InvalidData;
   if (!noColor && (type == "image/bmp" || type == "image/x-ms-bmp")) ImageColorTransform(&pixels);

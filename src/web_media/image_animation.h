@@ -18,4 +18,5 @@ bool ParseApng(const std::vector<uint8_t>&,ImageAnimation*);
 bool ParseWebpAnimation(const std::vector<uint8_t>&,ImageAnimation*);
 bool ComposeImageAnimation(const std::string&,const ImageAnimation&,uint32_t,uint32_t,
                           domain::web_media::ImageData*);
+bool DecodeGifImage(const std::vector<uint8_t>&,uint32_t,uint32_t,domain::web_media::ImageData*);
 }
