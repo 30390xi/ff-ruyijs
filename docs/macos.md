@@ -135,6 +135,45 @@ These surfaces now call the same system and Firefox code the donor uses. They ar
 
 The DataDome example's homepage result is a server score. It is not a missing Mac binding, and the example's pass condition stays as it is.
 
+## Comparison with Windows
+
+Reviewed at `045752e` against the Windows x64 surface. A row marked "same source" is unfinished on both platforms.
+
+| Surface | Windows | macOS |
+| --- | --- | --- |
+| JS context, DOM, fingerprint, clock, Python bridge | Implemented | Same API |
+| Necko HTTP/1.1 and HTTP/2 | Implemented | Verified. An HTTPS frame returned status 200 and version 20 |
+| HTTP/3 | Part of the Necko transport described in the README | Donor XUL contains neqo. With the socket process off the version stays 20. With it on, this xpcshell closes the pipe |
+| TLS profiles 100–159 | Described in the README. This source tree has no selector | The donor's Firefox 159 NSS ClientHello |
+| WebCrypto SHA, AES-CBC, AES-GCM, HMAC, ECDSA, ECDH | CNG | CommonCrypto and Security.framework |
+| Still images: PNG, JPEG, GIF, WebP, BMP, ICO | WIC | ImageIO, premultiplied BGRA |
+| Animated GIF | WIC disposal. A cleared frame can be transparent | ImageIO display frames. That area can keep the background color. Repetition comes from the GIF metadata |
+| APNG and animated WebP | Shared blend | ImageIO frames, then the shared blend. Core Graphics scaling leaves pixels premultiplied |
+| Image color | Display profile, then qcms | `CGDisplayCopyColorSpace` and `CGColorSpaceCopyICCData`, then qcms. No profile leaves the pixels unchanged |
+| Canvas text path and `fillText` | DirectWrite outline | `CTFontCreatePathForGlyph`, then the glyph mask |
+| `strokeText` | Paints nothing | Paints nothing |
+| Font alias | The platform font list | `Osaka-Mono` maps to `Osaka` when the PostScript name and the family both match. That entry is Firefox's single-face list |
+| COLR and CPAL | Version 0, palette 0 | Version 0, palette 0. Table bytes come from `CTFontCopyTable` |
+| Glyph gamma | DirectWrite rendering mode | `SystemTextGamma` is 1.8 and `SystemTextContrast` is 1.0. `gasp` and `maxp` are readable |
+| WebTransport | Shared C++. `webtransport_worker.py` is absent from the tree | Same sources. A live session uses the HTTP/3 path in the row above |
+| WebCodecs, audio decode, WebGPU, iframe navigation, customized built-ins, XML, form target | Same source | Interface only, or an explicit unimplemented error |
+| DataDome homepage | Server score | Server score. The example pass condition is unchanged |
+| Install | PyPI `win_amd64` wheel | Local `macosx_26_0_arm64` wheel. `runtime.json` stores size and sha256. The URL is empty |
+| C ABI client | DLL beside the shell | `libruyijs_client.dylib` still records the build-machine absolute path as its install name. Python loads that file by path |
+
+`image_wic.h` still contains a POSIX stub. macOS decode goes through ImageIO in `image_codec.cpp` and `image_gif.cpp`.
+
+## Follow-up plan
+
+The shell stays linked for `macosx_26_0_arm64`. Linux, Intel Macs, and macOS older than 26 stay outside this plan. New behavior comes from the Firefox donor or the system frameworks already linked: ImageIO, Core Text, Core Graphics, CommonCrypto, and Security.
+
+1. HTTP/3. Stay on the donor socket process and record why this xpcshell closes the pipe, from the logs that build already writes. The accepting result is version code 30. If this xpcshell cannot host that process, write that down and stop. WebTransport follows that result.
+2. TLS profiles. Find the existing Windows 100–159 selector before adding a Mac preference. Surface it on macOS only when the Firefox 159 donor already contains those profiles. Until then the Mac ClientHello is this donor's NSS.
+3. C client install name. `libruyijs_client.dylib` is built here. Point its install id at `@rpath/libruyijs_client.dylib` and keep `@executable_path`. Leave XUL, xpcshell, and NSS install names as Firefox wrote them.
+4. Image pixels. Keep ImageIO. A fixture can record the GIF background difference. Change pixels only when ImageIO already exposes the matching disposal.
+5. Font aliases. Add a name only when Firefox's `InitAliasesForSingleFaceList` in `gfxMacPlatformFontList.mm` already lists it.
+6. Publish. Leave `runtime.json` `macos.url` empty until a real archive URL exists. COLRv1 waits until the Windows parser reads past version 0.
+
 ## What not to commit
 
 Do not commit the Firefox tree, either objdir, `dist/js`, the helper venv, the macOS runtime zip, cookies, tokens, proxy credentials, or response bodies. The macOS `runtime.json` object may store size and sha256. Leave its URL empty until a real download exists.

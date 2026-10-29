@@ -231,7 +231,7 @@ Every example supports `--direct` (direct connection) and `--proxy http://127.0.
 
 ## 📏 Scope & limitations
 
-ruyiJS provides JavaScript execution and a broad Web API environment on **Windows x64**, and as a source build on **macOS arm64**. It has **no browser window and no full page layout or rendering** — it is a tool for automation, analysis, and research. Use it in compliance with the terms of service of any site you interact with and with applicable law. The macOS gaps are listed in [docs/macos.md](docs/macos.md).
+ruyiJS provides JavaScript execution and a broad Web API environment on **Windows x64**, and as a source build on **macOS arm64**. It has **no browser window and no full page layout or rendering** — it is a tool for automation, analysis, and research. Use it in compliance with the terms of service of any site you interact with and with applicable law. The macOS comparison with Windows and the follow-up plan are in [docs/macos.md](docs/macos.md).
 
 **Related:** [**ruyiHttp**](https://gitee.com/losenine888/ruyiHttp) — a Requests-style Python HTTP library built on Firefox's native networking components.
 
@@ -246,7 +246,7 @@ Python 3.10 and above on Windows x64 (64-bit), tested up to Python 3.14. The mac
 <details>
 <summary><b>Does it work on macOS or Linux?</b></summary>
 
-macOS arm64 is supported as a source build. It is not the PyPI wheel. The donor trees, helper venv, verified HTTP/1.1 and HTTP/2 path, and the surfaces that are still empty are in [docs/macos.md](docs/macos.md). Linux is not supported.
+macOS arm64 is supported as a source build and as a local `macosx_26_0_arm64` wheel. That wheel is not uploaded to PyPI. The Windows comparison and the follow-up plan are in [docs/macos.md](docs/macos.md). Linux is not supported.
 
 The JS engine is Mozilla's official **SpiderMonkey** and the networking stack is Mozilla's official **Necko** — both are built from the Firefox source tree and kept outside this repository.
 </details>
@@ -254,7 +254,7 @@ The JS engine is Mozilla's official **SpiderMonkey** and the networking stack is
 <details>
 <summary><b>Do I need to download a browser?</b></summary>
 
-On Windows, no. The wheel bundles the pinned SpiderMonkey + Necko runtime, and `pip install ruyijs` runs offline. On macOS you build two Firefox donor trees beside this repository; see [docs/macos.md](docs/macos.md). The PyPI wheel is the Windows runtime.
+On Windows, no. The wheel bundles the pinned SpiderMonkey + Necko runtime, and `pip install ruyijs` runs offline. On macOS, build the two donor trees once; `setup.py` can then make a local wheel that finds `dist/js` and `dist/necko/xpcshell` inside the package. See [docs/macos.md](docs/macos.md). The PyPI wheel is the Windows runtime.
 </details>
 
 <details>

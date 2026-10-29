@@ -231,7 +231,7 @@ python -m ruyijs.examples creepjs              # CreepJS 指纹审计
 
 ## 📏 使用范围与限制
 
-ruyiJS 在 **Windows x64** 上提供 JavaScript 执行及广泛的 Web API 环境，**macOS arm64** 则通过源码构建提供同一外壳。它**不含浏览器窗口，也没有完整的页面布局与渲染** —— 它是面向自动化、分析与研究的工具。请在遵守目标站点服务条款与适用法律的前提下使用。macOS 上尚未补齐的表面见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
+ruyiJS 在 **Windows x64** 上提供 JavaScript 执行及广泛的 Web API 环境，**macOS arm64** 则通过源码构建提供同一外壳。它**不含浏览器窗口，也没有完整的页面布局与渲染** —— 它是面向自动化、分析与研究的工具。请在遵守目标站点服务条款与适用法律的前提下使用。macOS 与 Windows 的比对和后续计划见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
 
 **相关项目：** [**ruyiHttp**](https://gitee.com/losenine888/ruyiHttp) —— 基于 Firefox 原生网络组件的 Requests 风格 Python 请求库。
 
@@ -246,7 +246,7 @@ Windows x64（64 位）上的 Python 3.10 及以上版本，已测试至 Python 
 <details>
 <summary><b>支持 macOS 或 Linux 吗？</b></summary>
 
-macOS arm64 以源码构建支持，不走 PyPI wheel。donor 树、helper venv、已验收的 HTTP/1.1 与 HTTP/2，以及仍然留空的表面，都写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。Linux 尚未支持。
+macOS arm64 可以用源码构建，也可以打本地的 `macosx_26_0_arm64` wheel。这个 wheel 不上传到 PyPI。和 Windows 的比对以及后续计划写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。Linux 尚未支持。
 
 JS 引擎是 Mozilla 官方的 **SpiderMonkey**，网络库是 Mozilla 官方的 **Necko**。两者都从 Firefox 源码树编译，并且放在本仓库外面。
 </details>
@@ -254,7 +254,7 @@ JS 引擎是 Mozilla 官方的 **SpiderMonkey**，网络库是 Mozilla 官方的
 <details>
 <summary><b>需要下载浏览器吗？</b></summary>
 
-Windows 不需要。wheel 内置锁定版 SpiderMonkey + Necko 运行时，`pip install ruyijs` 后即可离线运行。macOS 需要在本仓库旁边编译两份 Firefox donor，见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。PyPI 上的 wheel 是 Windows 运行时。
+Windows 不需要。wheel 内置锁定版 SpiderMonkey + Necko 运行时，`pip install ruyijs` 后即可离线运行。macOS 先在本仓库旁边编译两份 donor，之后 `setup.py` 可以打出本地 wheel，安装后从包内找到 `dist/js` 和 `dist/necko/xpcshell`。见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。PyPI 上的 wheel 是 Windows 运行时。
 </details>
 
 <details>
