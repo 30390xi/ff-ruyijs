@@ -8,10 +8,5 @@
   "inventory_sha256": "d681d5876924cc8de4afb09bda3062a22b1c0ac097d4df4d5636e0e1312aa49f",
   "url": "https://github.com/martinkeith700/ruyiJS/releases/download/v0.1.7/ruyijs-runtime-0.1.7-win-amd64.zip",
   "release_api": "",
-  "releases_api": "",
-  "mac_arm64": {
-    "archive": "ruyijs-runtime-0.1.7-mac-arm64.tar.gz",
-    "shell": "dist/js",
-    "glue": "dist/libmozglue.dylib"
-  }
+  "releases_api": ""
 }

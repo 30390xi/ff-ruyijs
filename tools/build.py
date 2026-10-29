@@ -177,6 +177,38 @@ def main():
                                        "deployed": str(deployed_oneshot) if deployed_oneshot else None}
             if deployed_oneshot is not None:
                 report["networkHelper"]["sha256"] = digest(deployed_oneshot)
+            if sys.platform == "darwin":
+                # The donor adapter is source, installed into an existing venv.
+                # A missing venv still leaves the linked shell; it does not
+                # invent a release package.
+                helper_sources = (
+                    root / "src/resource_network/necko_ruyi_init.py",
+                    root / "src/resource_network/necko_client.py",
+                    root / "src/resource_network/necko_adapters.py",
+                )
+                necko_dirs = []
+                for package in package_dirs:
+                    if not package.is_dir():
+                        continue
+                    necko_dir = package.parent / "necko"
+                    if necko_dir.is_dir():
+                        necko_dirs.append((package, necko_dir))
+                if not necko_dirs:
+                    report["networkHelper"]["missing"] = "helper venv"
+                    print("helper venv is missing; js stays linked and no release package was created")
+                else:
+                    installed = []
+                    for package, necko_dir in necko_dirs:
+                        targets = (
+                            (package / "__init__.py", helper_sources[0]),
+                            (necko_dir / "client.py", helper_sources[1]),
+                            (necko_dir / "adapters.py", helper_sources[2]),
+                        )
+                        for target, source in targets:
+                            target.write_bytes(source.read_bytes())
+                            deployed.append(target)
+                            installed.append(target)
+                    report["networkHelper"]["darwin"] = [str(path) for path in installed]
         report["incremental"] = native.incremental
         verify_unchanged(report["inputs"], rehash=True)
         version = subprocess.run([str(executable), "--version"], cwd=destination,

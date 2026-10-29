@@ -237,6 +237,11 @@ bool EcdhSecret(const ec::EcKey& privateKey, const ec::EcKey& publicKey, Bytes* 
   }
   CFMutableDictionaryRef params = CFDictionaryCreateMutable(
       kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+  if (!params) {
+    CFRelease(mine);
+    CFRelease(theirs);
+    return false;
+  }
   CFErrorRef error = nullptr;
   CFDataRef secret = SecKeyCopyKeyExchangeResult(
       mine, kSecKeyAlgorithmECDHKeyExchangeStandard, theirs, params, &error);
