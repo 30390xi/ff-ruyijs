@@ -168,6 +168,9 @@ class Environment final {
   bool ReadSourceSnapshot(SourceSnapshot* result);
   // The profile's navigator.language (the browser locale), "" when unset.
   bool ReadLanguage(std::string* result);
+  // locale.osLocale: the OS locale Firefox uses for Intl and untagged text
+  // ("" when the host's own OS locale applies).
+  bool ReadOsLocale(std::string* result);
   // The profile's window.devicePixelRatio (1 when unset).
   bool ReadDevicePixelRatio(double* result);
   // Commits a page-load navigation to an absolute HTTP(S) URL (RangeError otherwise).

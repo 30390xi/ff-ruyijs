@@ -46,7 +46,8 @@
     "href": "https://example.test/path?x=1#section"
   },
   "locale": {
-    "timezone": "Asia/Shanghai"
+    "timezone": "Asia/Shanghai",
+    "osLocale": ""
   },
   "webgl": {
     "vendor": "Mozilla",
@@ -70,6 +71,7 @@
     "extensions": [
       "ANGLE_instanced_arrays",
       "EXT_blend_minmax",
+      "EXT_clip_control",
       "EXT_color_buffer_half_float",
       "EXT_depth_clamp",
       "EXT_float_blend",
@@ -80,6 +82,7 @@
       "EXT_texture_compression_bptc",
       "EXT_texture_compression_rgtc",
       "EXT_texture_filter_anisotropic",
+      "EXT_texture_mirror_clamp_to_edge",
       "OES_element_index_uint",
       "OES_fbo_render_mipmap",
       "OES_standard_derivatives",
@@ -99,6 +102,7 @@
       "WEBGL_provoking_vertex"
     ],
     "extensions2": [
+      "EXT_clip_control",
       "EXT_color_buffer_float",
       "EXT_depth_clamp",
       "EXT_float_blend",
@@ -106,6 +110,8 @@
       "EXT_texture_compression_bptc",
       "EXT_texture_compression_rgtc",
       "EXT_texture_filter_anisotropic",
+      "EXT_texture_mirror_clamp_to_edge",
+      "EXT_texture_norm16",
       "OES_draw_buffers_indexed",
       "OES_texture_float_linear",
       "OVR_multiview2",
@@ -131,7 +137,7 @@
     }
   },
   "storage": {
-    "quota": 2147483648,
+    "quota": 10737418240,
     "usage": 0,
     "persisted": false
   },

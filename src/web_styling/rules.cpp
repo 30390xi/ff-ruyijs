@@ -13,7 +13,9 @@ namespace {
 bool TypeGet(JSContext* cx,unsigned argc,JS::Value* vp) {
   auto args=JS::CallArgsFromVp(argc,vp);JS::RootedObject self(cx);
   if(!RuleReceiver(cx,args.thisv(),&self)) return false;
-  args.rval().setInt32(RuleDataOf(self).kind);return true;
+  // CSSRule.type is 0 for rule kinds that have no legacy type constant.
+  const int kind=RuleDataOf(self).kind;
+  args.rval().setInt32(kind>=ruyijs::domain::styling::kCssLayerBlock?0:kind);return true;
 }
 bool TextGet(JSContext* cx,unsigned argc,JS::Value* vp) {
   auto args=JS::CallArgsFromVp(argc,vp);int member=WebKit::Slot(args);

@@ -22,6 +22,14 @@ All notable changes to this project are documented here. The format follows
 
 - The Windows family/language cache key in `font_collection.cpp` is a `'\0'` separator again, so that half compiles. The macOS key stays a newline. `requests`, `brotli`, and `zstandard` stay Darwin dependencies.
 
+### Changed
+
+- **License:** ff-ruyijs is now dual-licensed under the AGPL-3.0-only or a commercial
+  license (`COMMERCIAL-LICENSE.md`), replacing the ff-ruyijs Source Available License
+  v1.0. Releases up to 0.2.1 keep the license they shipped with; Mozilla-derived code
+  stays MPL-2.0. Contributions are accepted under the AGPL-3.0 plus a relicensing grant
+  (`CONTRIBUTING.md`).
+
 ## [0.2.1] - 2026-10-30
 
 ### Fixed

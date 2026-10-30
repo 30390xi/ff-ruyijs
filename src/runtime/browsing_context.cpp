@@ -2,6 +2,7 @@
 #include "runtime/user_activation_ports.h"
 #include "runtime/browsing_context.h"
 #include "execution_scheduling/realm.h"
+#include "web_styling/computed_source.h"
 #include "document_model/exception.h"
 #include "runtime/adopted_ports.h"
 #include "runtime/style_notification_ports.h"
@@ -381,6 +382,25 @@ bool BrowsingContext::Finish(Frames& owner) {
   styling = std::make_unique<web_styling::Realm>(cx, page, *helpers, *environment, content, shadowPrototype);
   styling->SetRangeBrandPort(&document_model::IsAbstractRangeValue);
   if (!styling->Install()) return false;
+  // ctx.lang "inherit" (CanvasRenderingContext2D::ResolveFontLang): the canvas
+  // element's inherited lang from the cascade, or the document root's.
+  canvas->SetLangPort([](void* context, JS::HandleObject element, std::string* lang) {
+    auto& owner = *static_cast<BrowsingContext*>(context);
+    lang->clear();
+    JS::RootedObject target(owner.cx, element);
+    if (!target) {
+      JSObject* document = owner.document->document();
+      if (!document) return true;
+      JS::RootedValue value(owner.cx, JS::ObjectValue(*document));
+      if (!owner.document->SvgLengthRoot(value, &target)) return false;
+      if (!target) return true;
+    }
+    web_styling::ComputedStyle style;
+    if (!owner.styling->ReadComputed(target, &style)) return false;
+    for (const auto& entry : style.values)
+      if (entry.first == "-x-lang") { *lang = entry.second; break; }
+    return true;
+  }, this);
   environment->SetOwnerPort("mediaFeatures", &web_styling::ConfigureProfileGroup, cx);
   styling->SetDocumentPorts(&StyleChain, &StyleSheets, document.get(), &StyleRelation);
   styling->SetDocumentNodePort([](void* context, uint64_t document, uint64_t key,

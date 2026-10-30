@@ -85,6 +85,16 @@ bool BindGeometryPorts(BrowsingContext& context) {
   context.environment->SetScrollExtentPort([](void* raw, double* maxX, double* maxY) {
     auto& owner = *static_cast<BrowsingContext*>(raw);
     *maxX = *maxY = 0;
+    // A frame whose embedding element (or an ancestor) is display:none has no
+    // rendered viewport and no scroll frame: Firefox reads 0/0.
+    if (owner.parent) {
+      JS::RootedObject frame(owner.cx);
+      if (!owner.parent->document->WrapNode(owner.frame_element, &frame)) return false;
+      std::array<double, 4> rect{};
+      bool present = false;
+      if (!owner.parent->geometry->MeasureElement(frame, &rect, &present, true)) return false;
+      if (!present) return true;
+    }
     JSObject* document = owner.document->document();
     if (!document) return true;
     JS::RootedValue value(owner.cx, JS::ObjectValue(*document));
@@ -127,7 +137,19 @@ bool BindGeometryPorts(BrowsingContext& context) {
   context.geometry->SetBoxPorts(boxes);
   context.document->SetOffsetGeometryPort([](void* raw, JS::HandleObject element,
                                              document_model::OffsetGeometry* out) {
-    return static_cast<BrowsingContext*>(raw)->geometry->MeasureOffset(element, out);
+    auto& owner = *static_cast<BrowsingContext*>(raw);
+    // A frame document whose embedding element (or an ancestor) is
+    // display:none has no pres shell: every element reads as frameless.
+    if (owner.parent) {
+      *out = {};
+      JS::RootedObject frame(owner.cx);
+      if (!owner.parent->document->WrapNode(owner.frame_element, &frame)) return false;
+      std::array<double, 4> rect{};
+      bool present = false;
+      if (!owner.parent->geometry->MeasureElement(frame, &rect, &present, true)) return false;
+      if (!present) return true;
+    }
+    return owner.geometry->MeasureOffset(element, out);
   }, &context);
   BindElementScroll(context);
   JS::RootedObject graphics(context.cx, context.document->svgPrototype(false));

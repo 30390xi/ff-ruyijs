@@ -153,6 +153,8 @@ void CssResolveVariables(StyleDeclaration& result, const std::map<std::string, u
     else longhands = CssBoxLonghands(name);
     for (const auto& longhand : longhands) {
       if (later(longhand)) continue;
+      // An !important longhand already won the cascade over a normal shorthand.
+      if (!important && result.has_property(longhand) && result.get_property_priority(longhand)) continue;
       const auto row = std::find_if(rows.begin(), rows.end(), [&](const auto& r) { return r.name == longhand; });
       if (row != rows.end()) result.set_property(longhand, row->value, important);
       else if (rows.empty()) unset(longhand);

@@ -33,11 +33,11 @@ uint8_t Scale(unsigned value, int bits) {
   return spread;
 }
 // SkScalerContext::PreprocessRec: an A8 mask keys its table by the luminance of
-// the canonical (3,3,2) colour rather than by the green channel, and the table
+// the canonical (3,3,3) colour (SkScalerContext.h: SkTMaskGamma<3, 3, 3>) rather than by the green channel, and the table
 // itself is built for that luminance's three-bit step.
 unsigned TableIndex(const uint8_t rgb[3]) {
   const unsigned r = Scale(rgb[0] >> 5, 3), g = Scale(rgb[1] >> 5, 3);
-  const unsigned b = Scale(rgb[2] >> 6, 2);
+  const unsigned b = Scale(rgb[2] >> 5, 3);
   // SkComputeLuminance: SK_LUM_COEFF_* in 1.8 fixed point, summing to 256.
   const unsigned luminance = (r * 54 + g * 183 + b * 19) >> 8;
   return luminance >> 5;

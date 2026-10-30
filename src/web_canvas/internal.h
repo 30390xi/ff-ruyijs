@@ -34,6 +34,10 @@ inline State* Self(const JS::CallArgs& args) {
 // prototype, which is how the Document Model's canvas elements are recognised
 // without this domain depending on the DOM tree.
 bool IsCanvas(State& state, JS::HandleValue value);
+// CanvasRenderingContext2D::ResolveFontLang: an explicit ctx.lang, else the
+// canvas element's inherited lang, else (OffscreenCanvas) the root element's;
+// "" means the default (the document / OS locale language group).
+bool CanvasLanguage(State& state, JS::HandleObject context, std::string* out);
 
 // Calls one of the receiver's own public methods. The DOM stays the single source
 // of truth for the reflected width/height content attributes.

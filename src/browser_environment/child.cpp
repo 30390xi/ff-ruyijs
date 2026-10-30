@@ -60,7 +60,7 @@ bool State::Inherit() {
   FieldValue list, language, timezone;
   const Model& source = shared ? shared->model : model;
   if (!source.Read(Kind::Navigator, 10, &list) ||
-      !source.Read(Kind::Navigator, 9, &language) ||
+      !source.Read(Kind::Locale, 1, &language) ||
       !source.Read(Kind::Locale, 0, &timezone)) {
     JS_ReportOutOfMemory(cx);
     return false;
@@ -76,6 +76,9 @@ bool State::Inherit() {
   if (!JS_FreezeObject(cx, array)) return false;
   languages = array;
   JS::Realm* target = JS::GetObjectRealmOrNull(page);
+  // xpc_LocalizeRuntime: the Intl default locale is the OS regional-prefs
+  // locale; navigator.language only feeds Accept-Language. "" keeps the
+  // engine's own default, which is the host OS locale.
   if (!language.text.empty()) JS::SetRealmLocaleOverride(target, language.text.c_str());
   if (!timezone.text.empty()) JS::SetRealmTimezoneOverride(target, timezone.text.c_str());
   ready = true;

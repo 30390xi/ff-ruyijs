@@ -39,6 +39,10 @@ void Realm::SetContextPort(bool (*port)(void*, JS::HandleObject, JS::HandleStrin
   state_->contextPortContext = context;
 }
 
+void Realm::SetLangPort(bool (*port)(void*, JS::HandleObject, std::string*), void* context) {
+  state_->langPort = port;
+  state_->langPortContext = context;
+}
 void Realm::SetCaptureStreamPort(bool (*port)(void*, JS::HandleObject, JS::MutableHandleObject),
                                  void* context) {
   state_->capturePort = port;

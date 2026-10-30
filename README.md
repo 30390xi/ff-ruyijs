@@ -8,7 +8,7 @@
 The authentic Firefox JavaScript engine and networking stack, with no window and no renderer —<br>
 made for web scraping, JS reverse engineering, data collection, and getting past bot checks.
 
-[![PyPI](https://img.shields.io/pypi/v/ruyijs?label=pypi&color=111111&logo=pypi&logoColor=white)](https://pypi.org/project/ruyijs/) [![Python](https://img.shields.io/badge/Python-%E2%89%A53.10-111111?logo=python&logoColor=white)](https://pypi.org/project/ruyijs/) [![License](https://img.shields.io/badge/license-Source%20Available-111111)](LICENSE) [![Windows](https://img.shields.io/badge/Windows%20x64-0078D4?logo=windows&logoColor=white)](https://pypi.org/project/ruyijs/) [![LinuxDO](https://img.shields.io/badge/LinuxDO-community-FFB003?logo=discourse&logoColor=white)](https://linux.do/t/topic/3078486)
+[![PyPI](https://img.shields.io/pypi/v/ruyijs?label=pypi&color=111111&logo=pypi&logoColor=white)](https://pypi.org/project/ruyijs/) [![Python](https://img.shields.io/badge/Python-%E2%89%A53.10-111111?logo=python&logoColor=white)](https://pypi.org/project/ruyijs/) [![License](https://img.shields.io/badge/license-AGPL--3.0%20%2B%20commercial-111111)](LICENSE) [![Windows](https://img.shields.io/badge/Windows%20x64-0078D4?logo=windows&logoColor=white)](https://pypi.org/project/ruyijs/) [![LinuxDO](https://img.shields.io/badge/LinuxDO-community-FFB003?logo=discourse&logoColor=white)](https://linux.do/t/topic/3078486)
 
 <sub>Sponsored by</sub>
 
@@ -16,7 +16,7 @@ made for web scraping, JS reverse engineering, data collection, and getting past
 
 **[Install](#-installation)** &nbsp;·&nbsp; **[Features](#-features)** &nbsp;·&nbsp; **[Verification systems](#-verification-systems-it-defeats)** &nbsp;·&nbsp; **[Examples](#-examples)** &nbsp;·&nbsp; **[FAQ](#-faq--troubleshooting)** &nbsp;·&nbsp; **[Contact](#-contact)** &nbsp;·&nbsp; **[LinuxDO](https://linux.do/t/topic/3078486)** &nbsp;·&nbsp; **English** · [简体中文](README.zh-CN.md)
 
-> **⚠️ Disclaimer:** This project is for researching next-generation AI browsers. Any form of brute-force reverse engineering is strictly rejected. The source code is fully open-source. Unauthorized commercial use is prohibited.
+> **⚠️ Disclaimer:** This project is for researching next-generation AI browsers. Any form of brute-force reverse engineering is strictly rejected. The source code is open source under the AGPL-3.0; closed-source or proprietary use requires a commercial license.
 
 <br>
 
@@ -315,13 +315,14 @@ Questions, permission requests, commercial licensing, or just to talk shop — a
 
 ## 📄 License
 
-Licensed under the **[ff-ruyijs Source Available License v1.0](LICENSE)**.
+ff-ruyijs is **dual-licensed**:
 
-- ✅ Free for personal learning, research, and non-commercial use
-- ✅ Modifications **must be open-sourced** when distributed
-- ❌ Commercial use **requires written authorization** from the author
+- **[AGPL-3.0](LICENSE)** — free for any use, commercial included, as long as you comply: if you distribute ff-ruyijs or a modified version, **or offer it to users over a network** (a hosted service or API), you must publish the complete source of your version under the AGPL-3.0.
+- **[Commercial license](COMMERCIAL-LICENSE.md)** — required to use ff-ruyijs in closed-source products or services, or to keep your modifications private.
 
-To request a commercial license, contact via WeChat (ID: **如意**) or open an issue on [GitHub](https://github.com/cutetailbud/ff-ruyijs).
+For a commercial license, contact via WeChat (ID: **如意**) or open an issue on [GitHub](https://github.com/cutetailbud/ff-ruyijs) titled "Commercial license".
+
+Mozilla-derived code (SpiderMonkey, Necko) stays under the MPL-2.0. Releases up to 0.2.1 keep the license they shipped with.
 
 See [`NOTICE`](NOTICE) for third-party attributions.
 

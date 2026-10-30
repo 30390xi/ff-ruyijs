@@ -55,6 +55,7 @@ void OffsetFrom(const LayoutCache& cache, size_t index, document_model::OffsetGe
     out->scroll_width = std::max(out->client_width, right + box.padding[1] - left);
     out->scroll_height = std::max(out->client_height, bottom + box.padding[2] - top);
   }
+  out->own_scroll_width = out->scroll_width; out->own_scroll_height = out->scroll_height;
   if (out->root) {
     // The root element's client and scroll sizes are the viewport scroll
     // frame's: the scrollport and the scrollable overflow.

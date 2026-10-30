@@ -78,6 +78,7 @@ bool MeasureText(JSContext* cx, unsigned argc, JS::Value* vp) {
   input.size = font.size;
   input.weight = font.weight;
   input.italic = font.italic;
+  if (!detail::CanvasLanguage(s, self, &input.language)) return false;
   web_geometry::CanvasTextMetrics metrics;
   if (!detail::Fonts(s).MeasureCanvas(units, input, &metrics))
     return WebKit::Fail(cx, "canvas text measurement failed");

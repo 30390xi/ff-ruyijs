@@ -37,9 +37,12 @@ struct Model::Impl {
   // kStorageFields (quota / usage / persisted). The quota is Firefox's desktop
   // default for a fresh origin; the headless runtime keeps no persistent store,
   // so usage and persistence read the configured values only.
-  double storage_quota = 2147483648.0;
+  // QuotaManager::GetGroupLimitForLimit: min(temporary limit / 5, 10 GiB),
+  // the limit being half the disk, so 10 GiB on any disk of 100 GiB or more.
+  double storage_quota = 10737418240.0;
   double storage_usage = 0.0;
   bool storage_persisted = false;
+  std::string os_locale;  // "": the host OS locale
 };
 }
 #endif

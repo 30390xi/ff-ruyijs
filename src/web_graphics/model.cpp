@@ -20,18 +20,19 @@ const char* const kShadingLanguageVersion = "WebGL GLSL ES 1.0";
 const char* const kVersion2 = "WebGL 2.0";
 const char* const kShadingLanguageVersion2 = "WebGL GLSL ES 3.00";
 
-// The extension names Firefox 158 reports to content on Windows with an ANGLE
-// D3D11 context (domtrace jscall-detail-desktop-20261019-230430,
-// getSupportedExtensions on both context versions). The order is the
-// getSupportedExtensions order, which sorts the names ASCII case-insensitively.
-// Privileged (MOZ_debug, EXT_disjoint_timer_query) and draft
-// (EXT_texture_norm16, WEBGL_explicit_present) ids stay absent.
+// The extension names Firefox 159 reports to content on Windows with an ANGLE
+// D3D11 context (getSupportedExtensions on both context versions, measured
+// 2026-10-30). The order is the getSupportedExtensions order, which sorts the
+// names ASCII case-insensitively. Firefox 159 adds EXT_clip_control and
+// EXT_texture_mirror_clamp_to_edge (both versions) and EXT_texture_norm16
+// (WebGL 2). Privileged (MOZ_debug, EXT_disjoint_timer_query) and draft
+// (WEBGL_explicit_present) ids stay absent.
 const char* const kWebGL1Extensions[] = {
-    "ANGLE_instanced_arrays", "EXT_blend_minmax", "EXT_color_buffer_half_float",
+    "ANGLE_instanced_arrays", "EXT_blend_minmax", "EXT_clip_control", "EXT_color_buffer_half_float",
     "EXT_depth_clamp", "EXT_float_blend", "EXT_frag_depth",
     "EXT_polygon_offset_clamp", "EXT_shader_texture_lod", "EXT_sRGB",
     "EXT_texture_compression_bptc", "EXT_texture_compression_rgtc",
-    "EXT_texture_filter_anisotropic", "OES_element_index_uint",
+    "EXT_texture_filter_anisotropic", "EXT_texture_mirror_clamp_to_edge", "OES_element_index_uint",
     "OES_fbo_render_mipmap", "OES_standard_derivatives", "OES_texture_float",
     "OES_texture_float_linear", "OES_texture_half_float",
     "OES_texture_half_float_linear", "OES_vertex_array_object",
@@ -40,10 +41,10 @@ const char* const kWebGL1Extensions[] = {
     "WEBGL_debug_shaders", "WEBGL_depth_texture", "WEBGL_draw_buffers",
     "WEBGL_lose_context", "WEBGL_provoking_vertex"};
 const char* const kWebGL2Extensions[] = {
-    "EXT_color_buffer_float", "EXT_depth_clamp", "EXT_float_blend",
+    "EXT_clip_control", "EXT_color_buffer_float", "EXT_depth_clamp", "EXT_float_blend",
     "EXT_polygon_offset_clamp", "EXT_texture_compression_bptc",
     "EXT_texture_compression_rgtc", "EXT_texture_filter_anisotropic",
-    "OES_draw_buffers_indexed", "OES_texture_float_linear", "OVR_multiview2",
+    "EXT_texture_mirror_clamp_to_edge", "EXT_texture_norm16", "OES_draw_buffers_indexed", "OES_texture_float_linear", "OVR_multiview2",
     "WEBGL_compressed_texture_s3tc", "WEBGL_compressed_texture_s3tc_srgb",
     "WEBGL_debug_renderer_info", "WEBGL_debug_shaders", "WEBGL_lose_context",
     "WEBGL_provoking_vertex"};

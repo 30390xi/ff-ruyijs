@@ -39,5 +39,10 @@ and Xcode version, the Firefox tag, and which of the two donor objdirs the build
 Also include a minimal script, the actual output and, where possible, what real Firefox
 returns for the same code. macOS maintainers follow [docs/macos.md](./docs/macos.md).
 
-By contributing you agree that your contributions are licensed under the
-[Mozilla Public License 2.0](./LICENSE).
+ff-ruyijs is dual-licensed under the [AGPL-3.0](./LICENSE) and a
+[commercial license](./COMMERCIAL-LICENSE.md). By submitting a contribution you
+agree that it is licensed under the AGPL-3.0, and you grant the project author a
+perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use,
+modify, sublicense and distribute your contribution under other license terms,
+including commercial ones. You confirm that you have the right to grant this.
+Changes to Mozilla-derived files remain under the MPL-2.0.

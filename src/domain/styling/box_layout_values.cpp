@@ -13,6 +13,18 @@ std::string BoxStyle::Get(const char* name) const {
 double BoxLength(const BoxStyle& style, const char* name, double percent, double fallback) {
   const auto text = style.Get(name);
   if (!std::isfinite(percent) && text.find('%') != text.npos) return fallback;
+  // A bare percentage: Gecko resolves it against the app-unit basis with
+  // LengthPercentage::to_used_value, multiplying in f32 and truncating to app
+  // units (nsLayoutUtils::ComputeCBDependentValue / Au::from_f32_px_trunc).
+  if (text.size() > 1 && text.back() == '%' && text.find_first_of("()") == std::string::npos) {
+    char* end = nullptr;
+    const double number = std::strtod(text.c_str(), &end);
+    if (end == text.c_str() + text.size() - 1 && std::isfinite(number)) {
+      const float basis = float(std::floor(percent * 60 + .5));
+      const float used = basis * (float(number) / 100.0f);
+      return std::trunc(std::clamp(double(used), -kBoxCoordMax, kBoxCoordMax)) / 60;
+    }
+  }
   const auto parsed = CssNumericResolve(text, style.font_size, style.root_font_size,
                                        std::isfinite(percent) ? percent : 0);
   return parsed.kind && (parsed.kind == CssLength || parsed.number == 0)

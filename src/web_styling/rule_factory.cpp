@@ -21,11 +21,15 @@ const JSClass kMediaRuleClass={"CSSMediaRule",JSCLASS_HAS_RESERVED_SLOTS(8),&rul
 const JSClass kSupportsRuleClass={"CSSSupportsRule",JSCLASS_HAS_RESERVED_SLOTS(8),&ruleOps};
 const JSClass kNestedDeclarationsClass={"CSSNestedDeclarations",JSCLASS_HAS_RESERVED_SLOTS(8),&ruleOps};
 const JSClass kKeyframeRuleClass={"CSSKeyframeRule",JSCLASS_HAS_RESERVED_SLOTS(8),&ruleOps};
+const JSClass kLayerBlockRuleClass={"CSSLayerBlockRule",JSCLASS_HAS_RESERVED_SLOTS(8),&ruleOps};
+const JSClass kLayerStatementRuleClass={"CSSLayerStatementRule",JSCLASS_HAS_RESERVED_SLOTS(8),&ruleOps};
+const JSClass kPropertyRuleClass={"CSSPropertyRule",JSCLASS_HAS_RESERVED_SLOTS(8),&ruleOps};
 bool IsRuleObject(JS::HandleObject object) {
   if(!object) return false;
   const auto* c=JS::GetClass(object);
   return c==&kStyleRuleClass||c==&kMediaRuleClass||c==&kSupportsRuleClass||c==&kNestedDeclarationsClass||
-    c==&kKeyframeRuleClass||c==&kKeyframesRuleClass||c==&kPageRuleClass;
+    c==&kKeyframeRuleClass||c==&kKeyframesRuleClass||c==&kPageRuleClass||
+    c==&kLayerBlockRuleClass||c==&kLayerStatementRuleClass||c==&kPropertyRuleClass;
 }
 bool RuleReceiver(JSContext* cx,JS::HandleValue value,JS::MutableHandleObject out,
                     bool styleOnly,bool conditionOnly) {
@@ -57,10 +61,18 @@ JSObject* NewCssRule(State& state,JS::HandleObject parent,size_t index,
       new(std::nothrow) std::shared_ptr<SheetRule>(ContainerRows(parent)[index]));
   if(!holder) { JS_ReportOutOfMemory(cx);return nullptr; }
   const int kind=(*holder)->kind;
+  namespace css=ruyijs::domain::styling;
   WebFace& face=kind==0?state.nestedDeclarations:kind==4?state.mediaRule:kind==12?state.supportsRule:
-    kind==7?state.keyframesRule:kind==8?state.keyframeRule:kind==6?state.pageRule:state.styleRule;
+    kind==7?state.keyframesRule:kind==8?state.keyframeRule:kind==6?state.pageRule:
+    kind==css::kCssLayerBlock?state.layerBlockRule:kind==css::kCssLayerStatement?state.layerStatementRule:
+    kind==css::kCssPropertyRule?state.propertyRule:state.styleRule;
+  // The layer interfaces' faces carry the shared stub class; instances get
+  // their own classes so rule members recognize them.
+  const JSClass* clasp=kind==7?&kRuleClass:kind==css::kCssLayerBlock?&kLayerBlockRuleClass:
+    kind==css::kCssLayerStatement?&kLayerStatementRuleClass:
+    kind==css::kCssPropertyRule?&kPropertyRuleClass:face.clasp;
   JS::RootedObject prototype(cx,kind==7?nullptr:face.prototype.get());
-  JS::RootedObject object(cx,JS_NewObjectWithGivenProto(cx,kind==7?&kRuleClass:face.clasp,prototype));
+  JS::RootedObject object(cx,JS_NewObjectWithGivenProto(cx,clasp,prototype));
   if(!object) return nullptr;
   if(kind==7) {
     JS::RootedValue storage(cx,JS::ObjectValue(*object));js::ProxyOptions options;

@@ -7,7 +7,7 @@ bool GroupReceiver(JSContext* cx,JS::HandleValue value,JS::MutableHandleObject o
   if(!RuleReceiver(cx,value,out)) return false;
   const auto* c=JS::GetClass(out);
   return c==&kStyleRuleClass||c==&kMediaRuleClass||c==&kSupportsRuleClass||c==&kPageRuleClass||
-    WebKit::Fail(cx,"CSSGroupingRule requires a grouping rule");
+    c==&kLayerBlockRuleClass||WebKit::Fail(cx,"CSSGroupingRule requires a grouping rule");
 }
 }
 bool RuleGroupGet(JSContext* cx,unsigned argc,JS::Value* vp) {

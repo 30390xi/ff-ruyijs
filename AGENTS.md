@@ -7,14 +7,14 @@
 ff-ruyijs is a **headless Firefox engine for Python** — it embeds the real SpiderMonkey (Firefox 159) JavaScript engine and the Necko HTTP stack so Python code can execute any site's JavaScript, pass bot checks, and collect data without a browser window.
 
 - **Repository:** https://github.com/cutetailbud/ff-ruyijs
-- **License:** Source Available — modifications must be open-sourced when distributed; commercial use requires author authorization
+- **License:** AGPL-3.0-only, or a commercial license from the author for closed-source use (see COMMERCIAL-LICENSE.md)
 
 ## Key facts
 
 - **Language:** Python 3.10+ (user-facing), C++ (engine bindings), JavaScript (browser contexts)
 - **Platform:** Windows x64, and macOS arm64 as a source build
-- **License:** ff-ruyijs Source Available License v1.0
-- **Install:** `pip install ruyijs` on Windows. On macOS arm64, build `dist/js` from source. The donor layout and the empty surfaces are in `docs/macos.md`.
+- **License:** AGPL-3.0-only + commercial (dual license); Mozilla-derived code is MPL-2.0
+- **Install:** `pip install ruyijs` on Windows. On macOS arm64, build `dist/js` from source. The donor layout and the comparison are in `docs/macos.md`.
 - **Entry point:** `from ruyijs import Context`
 
 ## Repository layout

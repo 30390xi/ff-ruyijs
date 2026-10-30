@@ -7,6 +7,16 @@
 #include <variant>
 #include "domain/styling/css_declarations.h"
 namespace ruyijs::domain::styling {
+// Internal kinds of the cascade layer rules; CSSRule.type reads 0 for both.
+// `selector` holds the layer name (block) or the comma-separated name list.
+constexpr int kCssLayerBlock=100,kCssLayerStatement=101;
+// @property: `selector` is the custom property name, `condition` holds the
+// descriptors as "syntax\x1finherits\x1finitial-value" (each "" when absent).
+constexpr int kCssPropertyRule=102;
+struct CssPropertyDescriptors { std::string syntax,inherits,initial; bool valid=false; };
+// The descriptors of a kCssPropertyRule row; `valid` per css-properties-values
+// §3.1 (syntax and inherits present, initial-value present unless syntax "*").
+CssPropertyDescriptors CssPropertyRuleDescriptors(const std::string& condition);
 struct CssomRuleValue {
   int kind=1;
   bool nested=false;

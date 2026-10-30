@@ -50,9 +50,16 @@ bool Realm::ReadGeometryNode(JS::HandleValue value, GeometryNode* out,
   for (auto key : keys) {
     NodeSnapshot node;
     if (!owner.Check(owner.model.Inspect(key, &node))) return false;
+    if (result.textContent && node.kind == NodeKind::Text) {
+      std::optional<DomString> text;
+      if (!owner.Check(owner.model.TextContent(key, &text))) return false;
+      result.segments.push_back({-1, text.value_or(u"")});
+      continue;
+    }
     if (node.kind != NodeKind::Element) continue;
     JS::RootedObject child(owner.cx);
     if (!source.owner->WrapNode(key, &child) || !children.append(child)) return false;
+    if (result.textContent) result.segments.push_back({int(children.length()) - 1, {}});
   }
   *out = std::move(result);
   return true;

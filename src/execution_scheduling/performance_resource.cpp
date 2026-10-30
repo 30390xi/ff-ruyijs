@@ -33,6 +33,19 @@ const NavigationTiming* NavigationRecord(JSContext* cx,JS::HandleObject entry){
 bool NavigationResource(JSContext* cx,const NavigationTiming& r,unsigned field,JS::MutableHandleValue out){
  const bool loaded=r.load_event_start>0;
  const double fetch=r.fetch_start.value_or(r.request_start);
+ // IMPL_RESOURCE_TIMING_TAO_PROTECTED_TIMING_PROP / _CORS_PROTECTED_SIZE_PROP:
+ // without timing access every phase from domainLookupStart to
+ // finalResponseHeadersStart reads 0 and nextHopProtocol is empty; without body
+ // access the sizes, status and content type are hidden.
+ if(!r.timing_allowed&&((field>=7&&field<=15)||field==2||field==17)){
+  if(field==2)return String(cx,"",out);
+  out.setDouble(0);return true;
+ }
+ if(!r.body_allowed&&field>=18&&field<=21){
+  if(field==21)return String(cx,"",out);
+  if(field==20)out.setInt32(0);else out.setDouble(0);
+  return true;
+ }
  switch(field){
   case 7: out.setDouble(r.establishment?r.dns_start:fetch);return true;      // domainLookupStart
   case 8: out.setDouble(r.establishment?r.dns_end:fetch);return true;        // domainLookupEnd
@@ -50,7 +63,8 @@ bool NavigationResource(JSContext* cx,const NavigationTiming& r,unsigned field,J
   case 16: out.setDouble(r.response_end);return true;
   // The sizes are filled in when the document load completes
   // (PerformanceMainThread::UpdateNavigationTimingEntry); 0 until then.
-  case 17: out.setDouble(!loaded?0:r.transfer_size?double(*r.transfer_size):r.encoded_size?double(r.encoded_size+300):0);return true;
+  case 17: out.setDouble(!loaded?0:!r.body_allowed?300:
+                        r.transfer_size?double(*r.transfer_size):r.encoded_size?double(r.encoded_size+300):0);return true;
   case 18: out.setDouble(loaded?double(r.encoded_size):0);return true;
   case 19: out.setDouble(loaded?double(r.decoded_size):0);return true;
   case 20: out.setInt32(r.status);return true;

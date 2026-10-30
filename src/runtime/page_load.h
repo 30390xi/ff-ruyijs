@@ -110,7 +110,7 @@ class PageLoad final {
  private:
   bool IsolateCrossSiteFrame(BrowsingContext& target, const std::string& url);
   bool RecordFrameNavigation(BrowsingContext& target, const std::string& url,
-                             const resource_network::HttpResult& http, double origin, double responseEnd);
+                             const resource_network::HttpResult& http, double origin, double responseEnd, double qpc);
   // The owners one document load runs against. The main page's are the ones
   // this coordinator was constructed with; a frame's come from its browsing
   // context, so the code below is shared instead of duplicated.
