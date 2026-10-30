@@ -25,6 +25,17 @@ from ._runtime_paths import get_runtime_path, shell_filename
 from ._values import JSError, decode, encode
 
 
+
+def macos_core_library(runtime_root):
+    """Prefer the freshly built dylib, then the staged runtime copy."""
+    root = Path(runtime_root)
+    for name in ("necko_tls", "necko"):
+        candidate = root / "dist" / name / "libnecko_core.dylib"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _running_under_wine():
     try:
         import ctypes
@@ -125,12 +136,17 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
                       get_runtime_path() / "dist" / shell_filename())
         if not self.shell.is_file():
             raise FileNotFoundError(f"ruyijs shell does not exist: {self.shell}")
-        if sys.platform == "darwin" and not child_environment.get("RUYIJS_NECKO_PYTHON"):
+        if sys.platform == "darwin":
             runtime_root = self.shell.parent.parent
-            bundled = runtime_root / "vendor" / "necko-derived" / "python" / "bin" / "python3"
-            plain = runtime_root / "vendor" / "necko-derived" / "python" / "python3"
-            if not bundled.is_file() and not plain.is_file():
-                child_environment["RUYIJS_NECKO_PYTHON"] = sys.executable
+            if not child_environment.get("RUYIJS_NECKO_PYTHON"):
+                bundled = runtime_root / "vendor" / "necko-derived" / "python" / "bin" / "python3"
+                plain = runtime_root / "vendor" / "necko-derived" / "python" / "python3"
+                if not bundled.is_file() and not plain.is_file():
+                    child_environment["RUYIJS_NECKO_PYTHON"] = sys.executable
+            if not child_environment.get("NECKO_CORE_LIBRARY"):
+                core = macos_core_library(runtime_root)
+                if core is not None:
+                    child_environment["NECKO_CORE_LIBRARY"] = str(core)
         _prefer_bundled_crt(self.shell)
         try:
             self._pipe = Pipe()

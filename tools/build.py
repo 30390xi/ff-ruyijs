@@ -51,7 +51,13 @@ def arguments():
                         help="reuse every existing local object without recompiling")
     parser.add_argument("--jobs", type=int, choices=range(1, 129), default=min(os.cpu_count() or 4, 128),
                         help="independent compiler processes (default: CPU count)")
+    parser.add_argument("--necko-core-only", action="store_true",
+                        help="build dist/necko_tls/libnecko_core.dylib and skip the shell")
     args = parser.parse_args()
+    if args.necko_core_only:
+        if not args.firefox_gfx_obj:
+            parser.error("--firefox-gfx-obj (or RUYIJS_FIREFOX_GFX_OBJ) is required")
+        return args
     if not args.donor_obj:
         parser.error("--donor-obj (or RUYIJS_DONOR_OBJ) is required")
     if not args.pristine and not args.firefox_gfx_obj:
@@ -65,6 +71,48 @@ def local_directory(root, relative):
         raise ValueError(f"build output is outside ruyijs: {path}")
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def build_necko_core(root, necko_obj):
+    """Link libnecko_core.dylib against the donor NSS next to xpcshell.
+
+    The dylib's rpath is @loader_path. Symlinks beside it let a local probe
+    load NSS without rewriting the donor binaries.
+    """
+    necko_obj = Path(necko_obj)
+    libdir = necko_obj / "dist" / "bin"
+    include = necko_obj / "dist" / "include"
+    nspr_source = necko_obj.parent / "nsprpub" / "pr" / "include"
+    source = root / "native" / "necko_tls" / "necko_tls.c"
+    if not source.is_file():
+        raise FileNotFoundError(source)
+    if not (libdir / "libnss3.dylib").is_file():
+        raise FileNotFoundError(libdir / "libnss3.dylib")
+    if not (nspr_source / "obsolete" / "protypes.h").is_file():
+        raise FileNotFoundError(nspr_source / "obsolete" / "protypes.h")
+    out = local_directory(root, "dist/necko_tls")
+    output = out / "libnecko_core.dylib"
+    command = [
+        "clang", "-dynamiclib", "-O2", "-Wall", "-Wextra", "-fvisibility=hidden",
+        "-DXP_DARWIN", "-DXP_UNIX", "-D__APPLE__",
+        "-arch", "arm64",
+        "-I", str(include / "nss"),
+        "-I", str(include / "nspr"),
+        "-I", str(nspr_source),
+        str(source),
+        "-L", str(libdir),
+        "-lnss3",
+        "-Wl,-rpath,@loader_path",
+        "-Wl,-install_name,@rpath/libnecko_core.dylib",
+        "-o", str(output),
+    ]
+    subprocess.run(command, check=True)
+    for name in ("libnss3.dylib", "libmozglue.dylib", "libfreebl3.dylib", "libsoftokn3.dylib"):
+        link = out / name
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(libdir / name)
+    return output
 
 
 def install_network_helper(root, deployed):
@@ -134,6 +182,23 @@ def install_network_helper(root, deployed):
             target.write_bytes(source.read_bytes())
             deployed.append(target)
             installed.append(target)
+        core_source = root / "src/resource_network/necko_core_client.py"
+        if core_source.is_file():
+            copied = necko_dir / "core_client.py"
+            copied.write_bytes(core_source.read_bytes())
+            deployed.append(copied)
+            installed.append(copied)
+        win_source = root / "native/necko_tls/necko_win"
+        if win_source.is_dir():
+            win_dest = necko_dir.parent / "necko_win"
+            win_dest.mkdir(exist_ok=True)
+            for source in sorted(win_source.iterdir()):
+                if not source.is_file() or source.suffix == ".pyc":
+                    continue
+                copied = win_dest / source.name
+                copied.write_bytes(source.read_bytes())
+                deployed.append(copied)
+                installed.append(copied)
     report["darwin"] = [str(path) for path in installed]
     return report
 
@@ -141,6 +206,12 @@ def install_network_helper(root, deployed):
 def main():
     args = arguments()
     root = Path(__file__).resolve().parents[1]
+    if args.necko_core_only:
+        if sys.platform != "darwin":
+            raise SystemExit("libnecko_core is built on Darwin")
+        build_necko_core(root, args.firefox_gfx_obj)
+        print("dist/necko_tls/libnecko_core.dylib")
+        return 0
     mode = "pristine" if args.pristine else "runtime"
     directory = local_directory(root, "build/" + mode)
     destination = local_directory(root, os.environ.get("RUYIJS_DESTINATION", "dist/pristine" if args.pristine else "dist"))
@@ -240,6 +311,9 @@ def main():
             report["residency"] = previous["domains"]
         if not args.pristine:
             report["client"] = build_client(native, destination)
+            if sys.platform == "darwin":
+                build_necko_core(root, args.firefox_gfx_obj)
+                report["neckoCore"] = "dist/necko_tls/libnecko_core.dylib"
             # The Necko Python runtime ships with releases, not the source tree.
             # A checkout without the helper venv still links the shell.
             report["networkHelper"] = install_network_helper(root, deployed)

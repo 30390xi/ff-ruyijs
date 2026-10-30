@@ -10,7 +10,7 @@ Python API、DOM、时钟和页面逻辑仍是同一份源码。macOS 增加的�
 
 - 同一套 API：JS 上下文、DOM、Python 桥、WebCrypto 算法，以及静态图格式。
 - 可以接受的平台差异：命名管道或 Unix socket，CNG 或 CommonCrypto，WIC 或 ImageIO，DirectWrite 或 Core Text。GIF disposal、字形 gamma 和中文回退跟随系统解码器，不要求与 Windows 像素一致。
-- 这次移植不做：socket process 关闭时 HTTP/3 停在版本码 20。`Context(tls=)` 会写入 `NECKO_FIREFOX`，这只 xpcshell 不读它。DNS、连接和 TLS 计时保持 0。没有 macOS 的 PyPI wheel，`macos.url` 保持为空。
+- 这次移植不做：socket process 关闭时 HTTP/3 停在版本码 20。直连 HTTPS 经 `libnecko_core.dylib` 跟随 `Context(tls=)`，握手个数和 0.2.1 的请求头、HTTP/2 设置表都跟着走。页面复查了 100 和 159。八个边界版本是库内 GET，不是页面。这份表里的 HTTP/3 字段不用。代理仍走 xpcshell，这次没有重测。明文 HTTP 仍从 donor 返回 `necko 804b0033`。DNS、连接和 TLS 计时保持 0。没有 macOS 的 PyPI wheel，`macos.url` 保持为空。
 
 ## 各部分放在哪
 
@@ -19,7 +19,8 @@ macOS 上的 ruyijs 只做外壳。SpiderMonkey 和 Necko/NSS 来自同一份官
 | 部分 | 来源 |
 | --- | --- |
 | `dist/js`、`dist/libmozglue.dylib` | SpiderMonkey standalone donor，再经 `tools/build.py` |
-| Necko/NSS、TLS、HTTP/2 | 浏览器 donor 编出的 `xpcshell` |
+| Necko/NSS 回退、代理、非 HTTPS | 浏览器 donor 编出的 `xpcshell` |
+| `libnecko_core.dylib` | `native/necko_tls/`，链到 donor NSS 3.131。直连 HTTPS。查找顺序是 `dist/necko_tls`，然后 `dist/necko` |
 | 帧管道、进程启动、C ABI 客户端 | 本仓库 |
 | Python helper venv | `vendor/necko-derived/python`，已被 gitignore。wheel 使用安装它的那个 Python |
 
@@ -70,7 +71,7 @@ helper 关闭 socket process。client 设置 `MOZ_DISABLE_SOCKET_PROCESS=1`。`n
 
 ## 编译外壳和 helper
 
-helper venv 使用 Python 3.12。`tools/bootstrap_macos_helper.py` 先在 `PATH` 里找 `python3.12`，再看 `~/.local/bin`、Homebrew 和 `/usr/local/bin`。都没有就停下来。`vendor/necko-derived/python/pyvenv.cfg` 已经存在时，脚本不动这个 venv。
+helper venv 使用 Python 3.12。`tools/bootstrap_macos_helper.py` 先在 `PATH` 里找 `python3.12`，再看 `~/.local/bin`、Homebrew 和 `/usr/local/bin`。都没有就停下来。`vendor/necko-derived/python/pyvenv.cfg` 已经存在时，脚本保留这个 venv，只安装导入失败的包。
 
 在仓库根目录执行，链接外壳时带上 `MACOSX_DEPLOYMENT_TARGET=26.0`：
 
@@ -79,9 +80,7 @@ python3.12 -B tools/bootstrap_macos_helper.py
 python3.12 -B tools/build.py --donor-obj ../firefox-159/obj-js-standalone
 ```
 
-如果只有通过代理才能访问 PyPI，先在环境里导出那个代理，再运行 bootstrap。脚本里不写代理地址。
-
-bootstrap 安装帧适配器仍然要导入的三个包：`requests`、`brotli`、`zstandard`。TLS 由 donor xpcshell 完成。`requests` 只负责准备 Windows 上 oneshot 已经在用的那一帧。
+bootstrap 安装 `requests`、`brotli`、`zstandard`、`h2`、`cryptography`、`backports.zstd` 和 `publicsuffixlist`。缺的 wheel 只来自 gitignore 的 `vendor/necko-derived/wheels`，用 `pip --no-index`。用 `curl --noproxy '*'` 从一个 simple index 镜像把 wheel 放进这个目录。目录是空的且还有缺包时，脚本停下来。脚本里不写代理地址。这一轮没有再跑 bootstrap。当前 helper 已经能导入 `publicsuffixlist`。`firefox-suffixes.dat` 放在 `necko_win/_firefox.py` 旁边，随这个目录一起复制。直连 HTTPS 用 `h2` 和 `cryptography` 配合这个库。`requests` 仍负责准备 Windows 上 oneshot 已经在用的那一帧。代理或非 HTTPS 仍走 donor xpcshell。
 
 `tools/build.py` 随后把已跟踪的源码复制进 venv：
 
@@ -93,6 +92,8 @@ bootstrap 安装帧适配器仍然要导入的三个包：`requests`、`brotli`�
 | `src/resource_network/necko_client.py` | `necko/client.py` |
 | `src/resource_network/necko_adapters.py` | `necko/adapters.py` |
 | `src/resource_network/necko_pkg_init.py` | `necko/__init__.py` |
+| `src/resource_network/necko_core_client.py` | `necko/core_client.py` |
+| `native/necko_tls/necko_win/` | helper 导入路径上的 `necko_win/` |
 
 Windows 上同一次构建只复制 `oneshot.py`。Darwin 的 venv 不存在时，外壳仍然完成链接，也不会另造一个发布包。
 
@@ -102,9 +103,9 @@ Windows 上同一次构建只复制 `oneshot.py`。Darwin 的 venv 不存在时�
 
 ## 一次请求怎么走
 
-长度前缀帧和 Windows 相同。macOS 上的管道是 Unix socket。外壳启动 `python -I -B -m ruyijs_necko.oneshot`，这个进程在整个会话里保持一个 xpcshell。xpcshell 持有 TLS、HTTP/2、cookie 和重定向。`redirectionLimit` 为 0，所以 3xx 就作为这次的响应返回。Python 不保存 cookie，也不跟随重定向。
+长度前缀帧和 Windows 相同。macOS 上的管道是 Unix socket。外壳启动 `python -I -B -m ruyijs_necko.oneshot`。直连 HTTPS 使用 `libnecko_core.dylib`。ALPN `h2` 使用产品的 HTTP/2 设置。ALPN 为 `http/1.1` 时在这条套接字上写 HTTP/1.1。其他 ALPN 表示不了，路由可以回退。代理或非 HTTPS 在该请求上保留 xpcshell。证书校验失败不回退。不保存 cookie。`redirectionLimit` 仍是 0，xpcshell 路径上也是，所以 3xx 就作为这次的响应返回。同一个 helper 进程里，同源 HTTP/2 可以复用一条连接。页面外壳仍是每个请求启动一次 oneshot，除非使用 `--session`。
 
-这条路径上验收过的是 HTTP/1.1 和 HTTP/2。帧冒烟只打印状态、版本码（HTTP/2 为 `20`）和正文长度。donor 的 XUL 里有 neqo，偏好名是 `network.http.http3.enable`。socket process 保持关闭时，对一个支持 HTTP/3 的源发两次请求，版本码仍是 20。打开 socket process 后，这份 xpcshell 会关掉管道，并且不写错误。不要再写一套 HTTP/3。
+直连 HTTPS 的页面验收过 HTTP/2，版本码 20，覆盖 100 和 159。这条套接字上的 HTTP/1.1 做过单元测试，没有对活的源打开过。更早的 xpcshell 路径也曾返回 HTTP/1.1。donor 的 XUL 里有 neqo，偏好名是 `network.http.http3.enable`。socket process 保持关闭时，对一个支持 HTTP/3 的源发两次请求，版本码仍是 20。打开 socket process 后，这份 xpcshell 会关掉管道，并且不写错误。不要再写一套 HTTP/3。明文 `http://example.com/` 仍从这份 donor 返回 `necko 804b0033`。
 
 ## 系统框架
 
@@ -121,8 +122,8 @@ POSIX 改动留在现有 `#ifndef _WIN32` 的非 Windows 一侧。Windows 的 `#
 - ImageIO 静态图：PNG、JPEG、GIF、WebP、BMP、ICO，预乘 BGRA。多帧 GIF 使用 ImageIO 已经合成好的显示帧。
 - SVG 路径边界，覆盖 M、L、C、Q、A、Z。
 - WebCrypto 的 SHA、AES-CBC、AES-GCM、HMAC、ECDSA、ECDH。ECDH 的参数字典分配失败时返回 false，调用方抛出 `OperationError`。
-- 经 donor xpcshell 的 Necko/NSS。不带 donor 环境时，打开 `https://example.com/` 返回状态 200，协议 `h2`。Akamai 示例曾以 `init_real` 为真通过，协议是 HTTP/2。
-- `Context(tls="100".."159")` 会被接受，并作为 `NECKO_FIREFOX` 传给 xpcshell。`necko_fetch.js` 不读这个变量，所以这只 xpcshell 仍用 donor 的 Firefox 159 ClientHello。
+- 经 `libnecko_core.dylib` 的直连 HTTPS。`Context()` 和 `Context(tls="100")` 打开 `https://example.com/` 都是状态 200、协议 `h2`，握手个数跟着 `tls=`。Akamai 示例曾以 `init_real` 为真通过，协议是 HTTP/2，那次走的是更早的 xpcshell 路径。
+- `Context(tls=)` 会写入 `NECKO_FIREFOX`。直连 HTTPS 由这个库读取。`necko_fetch.js` 仍然不读。代理仍走 xpcshell。结果在 `docs/tls-profile.zh-CN.md`。
 
 适配器重新链接之后，CreepJS 再次通过，包含 `svg` 和 `canvas 2d`，没有失败项。
 
@@ -151,9 +152,9 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 | 表面 | Windows | macOS |
 | --- | --- | --- |
 | JS 上下文、DOM、指纹、时钟、Python 桥 | 已实现 | 同一套 API |
-| Necko HTTP/1.1 与 HTTP/2 | 已实现 | 这次外壳再次验收，且没有 donor 环境。一次页面导航和一个 iframe 文档都返回状态 200、版本码 20（`h2`） |
+| Necko HTTP/1.1 与 HTTP/2 | 已实现 | 这一轮直连 HTTPS 页面在 100 和 159 都返回状态 200、版本码 20（`h2`）。ALPN 为 `http/1.1` 时写 HTTP/1.1。解析器做过单元测试。没有对活的 HTTP/1.1 源打开过。明文 `http://example.com/` 仍从 xpcshell 返回 `necko 804b0033` |
 | HTTP/3 | README 把它写进 Necko 传输 | donor 的 XUL 含有 neqo。socket process 关闭时，直连的两次请求在响应带上 `h3` 的 `alt-svc` 之后仍是版本码 20。打开后这只 xpcshell 以信号 11 退出，日志是空的。没有加偏好设置 |
-| TLS 配置 100–159 | `Context(tls=)` | 同一个参数。它被写进 xpcshell 的 `NECKO_FIREFOX`。这只 xpcshell 的脚本不读它，ClientHello 仍是 donor 的 Firefox 159 |
+| TLS 配置 100–159 | `Context(tls=)` | 直连 HTTPS 走 `libnecko_core.dylib`。页面 100 和 159 跟着配置个数：100 是 17 个套件、6 个组、2 个 key share，159 是 15、5、3。八个边界的库内 GET 与表一致，并返回 200 和 `h2`。没写的请求头和 HTTP/2 设置跟随 0.2.1 的表。没有把全部 60 个版本当页面打开（`docs/tls-profile.zh-CN.md`） |
 | WebCrypto：SHA、AES-CBC、AES-GCM、HMAC、ECDSA、ECDH | CNG | CommonCrypto 与 Security.framework |
 | 静态图：PNG、JPEG、GIF、WebP、BMP、ICO | WIC | ImageIO，预乘 BGRA |
 | 多帧 GIF | WIC disposal。被清掉的帧可以是透明的 | ImageIO 显示帧。同一区域可能留下背景色。重复次数来自 GIF 元数据 |
@@ -178,7 +179,7 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 外壳按 `macosx_26_0_arm64` 链接。Linux、Intel Mac，以及低于 macOS 26 的系统不在这份计划里。新行为只接到已经在用的 Firefox donor 或系统框架：ImageIO、Core Text、Core Graphics、CommonCrypto、Security。
 
 1. HTTP/3 这一轮结束。socket process 关闭时，直连请求和紧接着的下一次都停在版本码 20，尽管响应已经通告 `h3`。打开 socket process 后，这只 xpcshell 以信号 11 退出，日志是空的。没有提交偏好，也没有加第二套 QUIC。WebTransport 仍要等真正的版本码 30。
-2. TLS 配置。`Context(tls=)` 是上游参数，会作为 `NECKO_FIREFOX` 传给子进程。这只 xpcshell 不读它，所以没有第二张 ClientHello 表。停在这里，不加 JA3 开关。
+2. TLS 配置。直连 HTTPS 的握手个数，以及产品请求头和 HTTP/2 设置表，都跟着 `tls=`。页面复查了 100 和 159。还没做的是 HTTP/3，以及 donor 明文 HTTP 的套接字类型（`necko 804b0033`）。记录长度不要求逐字节相同。不要加 JA3 开关。
 3. C 客户端安装名已经完成。`otool -D` 打印 `@rpath/libruyijs_client.dylib`，rpath 是 `@executable_path`。
 4. 图像像素。继续用 ImageIO。可以用一条夹具记下 GIF 背景色差异。只有 ImageIO 已经提供对应 disposal 时才改像素。
 5. 字体别名。Mac 只保留 `Osaka-Mono` 到 `Osaka`。字体选择仍走 Core Text 回退。上游的语言偏好、SimSun 和 Arial 列表留在 `font_collection.cpp` 的 Windows 一侧。Windows 的缓存分隔符保持源码转义 `'\0'`，文件因此仍是文本。

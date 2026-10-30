@@ -52,7 +52,7 @@ python -m pip install ruyijs
 
 Windows 的 wheel 内置 SHA256 锁定的 SpiderMonkey + Necko 运行时（约 42 MB），安装后即可离线运行，无需下载浏览器，无外部依赖。
 
-**macOS arm64** 不使用这个 wheel。它用 Python 3.12 从源码构建，并依赖放在仓库外面的两份官方 Firefox donor。macOS 上验收过的网络路径是 HTTP/1.1 和 HTTP/2。步骤和未完成的表面见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
+**macOS arm64** 不使用这个 wheel。它用 Python 3.12 从源码构建，并依赖放在仓库外面的两份官方 Firefox donor。这一轮查过的页面路径是直连 HTTPS 上的 HTTP/2。ALPN 为 `http/1.1` 时会写 HTTP/1.1，这一段做过单元测试，没有对活的源打开过。步骤和未完成的表面见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
 
 升级：
 ```sh
@@ -141,7 +141,7 @@ with Context() as context:
 
 ### 基于 Necko 的原生网络
 
-页面内 `fetch` 与 XHR 走真实 HTTP/1.1、2、3，并通过按上下文隔离的代理。用 `put_resource()` 自行提供响应即可离线复跑整条已捕获的流程。用 `net_log()` 查看每一次请求。 macOS 源码构建验收过的是 HTTP/1.1 和 HTTP/2，界限见 `docs/macos.zh-CN.md`。
+页面内 `fetch` 与 XHR 走真实 HTTP/1.1、2、3，并通过按上下文隔离的代理。用 `put_resource()` 自行提供响应即可离线复跑整条已捕获的流程。用 `net_log()` 查看每一次请求。macOS 源码构建这一轮查过的页面路径是直连 HTTPS 上的 HTTP/2，界限见 `docs/macos.zh-CN.md`。
 
 ### 原生 TLS 指纹 —— 自由切换 Firefox 100 – 159
 
@@ -149,7 +149,7 @@ with Context() as context:
 
 Necko 传输层可**自由切换 Firefox 100 – 159 的 TLS 配置**，每个版本均精确复现该版本的 ClientHello，在线上呈现不同的 JA3 / JA4 指纹——可用于轮换浏览器身份、规避按版本封禁，或测试站点对不同 Firefox 版本的反应。
 
-每个 Context 用 `tls=` 选择版本（`"100"`–`"159"`，默认 159）。它只改变该 Context 的 Necko 传输层的 TLS ClientHello、HTTP/2 设置和 HTTP/3 优先级；如需页面内一致，请用 `configure_fingerprint` 设置对应版本的 User-Agent。 macOS 源码构建会接受这个参数并写入 xpcshell 环境，该 xpcshell 不读取它（`docs/macos.zh-CN.md`）。
+每个 Context 用 `tls=` 选择版本（`"100"`–`"159"`，默认 159）。在 Windows 上，这会改变该 Context 的 Necko 传输层的 TLS ClientHello、HTTP/2 设置和 HTTP/3 优先级；如需页面内一致，请用 `configure_fingerprint` 设置对应版本的 User-Agent。在 macOS 上，库报告 NSS 3.131 时，直连 HTTPS 走 arm64 `libnecko_core.dylib`。外壳先找 `dist/necko_tls/libnecko_core.dylib`，再找暂存的 `dist/necko` 副本。已经设置的 `NECKO_CORE_LIBRARY` 优先。`Context()` 和 `Context(tls="100")` 都打开了 `https://example.com/`，状态 200，协议 `h2`。测到的握手是 159 为 15 个套件、5 个组、3 个 key share，100 为 17、6、2。簇边界 100、119、132、135、151、154、156、159 的库内 GET 也返回 200 和 `h2`，个数与配置表一致。其余版本没有逐个当页面打开。调用方没写的请求头和 HTTP/2 设置跟随 0.2.1 产品表里这个 `tls=` 的值。调用方写了的头优先。这份表里的 HTTP/3 字段不用，HTTP/3 也没有变。代理、库缺失或 NSS 版本不同仍走 donor xpcshell。这次没有重测代理。明文 HTTP 仍从这份 donor 返回 `necko 804b0033`（`docs/tls-profile.zh-CN.md`）。
 
 ```python
 with Context(proxy="http://127.0.0.1:7890", timeout=30, tls="120") as context:

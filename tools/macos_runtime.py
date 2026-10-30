@@ -52,6 +52,9 @@ def stage_necko(dest: Path, donor: Path, script: Path) -> None:
     if not script.is_file():
         raise FileNotFoundError("Necko fetch script is missing")
     shutil.copy2(script, dest / "necko_fetch.js")
+    core = script.parents[2] / "dist" / "necko_tls" / "libnecko_core.dylib"
+    if core.is_file():
+        shutil.copy2(core, dest / "libnecko_core.dylib")
 
 
 def write_runtime_zip(project: Path, archive: Path) -> None:
