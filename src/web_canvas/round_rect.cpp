@@ -1,6 +1,8 @@
-// RoundRect records a bounded polygon through the existing path store (D69).
+// roundRect(): RoundRectImpl's argument steps; the path itself is built by the
+// Skia bridge from the recorded op 11 (AppendRoundedRectToPath, four Béziers).
 #include "web_canvas/internal.h"
 #include <algorithm>
+#include <vector>
 #include "js/ErrorReport.h"
 #include "js/ForOfIterator.h"
 #include "js/Symbol.h"
@@ -8,96 +10,95 @@
 
 namespace ruyijs::web_canvas {
 namespace {
-struct Radius { double x=0, y=0; };
-bool ReadRadius(JSContext* cx,JS::HandleValue value,Radius* out) {
-  if (value.isObject()) {
-    JS::RootedObject object(cx,&value.toObject());
-    JS::RootedValue x(cx),y(cx);
-    if (!JS_GetProperty(cx,object,"x",&x) || !JS_GetProperty(cx,object,"y",&y)) return false;
-    return (x.isUndefined() || JS::ToNumber(cx,x,&out->x)) &&
-           (y.isUndefined() || JS::ToNumber(cx,y,&out->y));
-  }
-  if (value.isNullOrUndefined()) return true;
-  if (!JS::ToNumber(cx,value,&out->x)) return false;
-  out->y=out->x;return true;
-}
-bool Radii(JSContext* cx,JS::HandleValue value,Radius (&r)[4],bool* usable) {
-  std::vector<Radius> values;
-  bool sequence=false;
-  if (value.isObject()) {
-    JS::RootedObject object(cx,&value.toObject());
-    JS::RootedId key(cx,JS::PropertyKey::Symbol(JS::GetWellKnownSymbol(cx,JS::SymbolCode::iterator)));
-    JS::RootedValue iter(cx);
-    if (!JS_GetPropertyById(cx,object,key,&iter)) return false;
-    sequence=!iter.isNullOrUndefined();
-  }
-  if (sequence) {
-    JS::ForOfIterator iter(cx);
-    if (!iter.init(value)) return false;
-    for (;;) {
-      bool done;JS::RootedValue item(cx);
-      if (!iter.next(&item,&done)) return false;
-      if (done) break;
-      if (values.size()==4) return WebKit::FailKind(cx,"roundRect needs one to four radii",JSEXN_RANGEERR);
-      Radius radius;
-      if (!ReadRadius(cx,item,&radius)) return false;
-      values.push_back(radius);
+// One member of the radii union: an unrestricted double, or a DOMPointInit
+// whose members WebIDL converts in w, x, y, z order.
+struct Radius { double x = 0, y = 0; bool point = false; };
+bool ReadRadius(JSContext* cx, JS::HandleValue value, Radius* out) {
+  if (value.isObject() || value.isNullOrUndefined()) {
+    out->point = true;
+    if (value.isNullOrUndefined()) return true;
+    JS::RootedObject object(cx, &value.toObject());
+    const char* names[] = {"w", "x", "y", "z"};
+    for (const char* name : names) {
+      JS::RootedValue member(cx);
+      double number = 0;
+      if (!JS_GetProperty(cx, object, name, &member)) return false;
+      if (!member.isUndefined() && !JS::ToNumber(cx, member, &number)) return false;
+      if (name[0] == 'x' && !member.isUndefined()) out->x = number;
+      if (name[0] == 'y' && !member.isUndefined()) out->y = number;
     }
-  } else {
-    Radius radius;
-    if (!ReadRadius(cx,value,&radius)) return false;
-    values.push_back(radius);
+    return true;
   }
-  if (values.empty()) return WebKit::FailKind(cx,"roundRect needs one to four radii",JSEXN_RANGEERR);
-  *usable=true;
-  for (const auto& v:values) {
-    if (!std::isfinite(v.x) || !std::isfinite(v.y)) *usable=false;
-    if (v.x<0 || v.y<0) return WebKit::FailKind(cx,"Negative roundRect radius",JSEXN_RANGEERR);
-  }
-  r[0]=values[0];r[1]=values.size()>1?values[1]:r[0];
-  r[2]=values.size()>2?values[2]:r[0];r[3]=values.size()>3?values[3]:r[1];
+  if (!JS::ToNumber(cx, value, &out->x)) return false;
+  out->y = out->x;
   return true;
 }
+// The union conversion the binding does before the method runs.
+bool ConvertRadii(JSContext* cx, JS::HandleValue value, std::vector<Radius>* values,
+                  bool* sequence) {
+  *sequence = false;
+  if (value.isObject()) {
+    JS::RootedObject object(cx, &value.toObject());
+    JS::RootedId key(cx, JS::PropertyKey::Symbol(JS::GetWellKnownSymbol(cx, JS::SymbolCode::iterator)));
+    JS::RootedValue iter(cx);
+    if (!JS_GetPropertyById(cx, object, key, &iter)) return false;
+    *sequence = !iter.isNullOrUndefined();
+  }
+  if (!*sequence) {
+    Radius radius;
+    if (!ReadRadius(cx, value, &radius)) return false;
+    values->push_back(radius);
+    return true;
+  }
+  JS::ForOfIterator iter(cx);
+  if (!iter.init(value)) return false;
+  for (;;) {
+    bool done;
+    JS::RootedValue item(cx);
+    if (!iter.next(&item, &done)) return false;
+    if (done) break;
+    if (values->size() >= 1u << 16) return WebKit::FailKind(cx, "roundRect radii limit", JSEXN_RANGEERR);
+    Radius radius;
+    if (!ReadRadius(cx, item, &radius)) return false;
+    values->push_back(radius);
+  }
+  return true;
 }
-bool RoundRect(JSContext* cx,unsigned argc,JS::Value* vp) {
-  auto args=JS::CallArgsFromVp(argc,vp);
-  const bool path=detail::ContextSlot(args)==100;
+}  // namespace
+
+bool RoundRect(JSContext* cx, unsigned argc, JS::Value* vp) {
+  auto args = JS::CallArgsFromVp(argc, vp);
+  const bool path = detail::ContextSlot(args) == 100;
   JS::RootedObject self(cx);
-  if (path ? !WebKit::Check(cx,args.thisv(),&kPath2DClass,&self,"Illegal invocation")
-           : !detail::ContextReceiver(cx,args,&self)) return false;
-  if (argc<4) return WebKit::Fail(cx,"roundRect requires four coordinates");
-  double rect[4];bool valid;
-  // Convert all required arguments even when an earlier value is non-finite.
-  for (int i=0;i<4;++i) if (!JS::ToNumber(cx,args[i],&rect[i])) return false;
-  Radius r[4];
-  if (!Radii(cx,args.get(4),r,&valid)) return false;
+  if (path ? !WebKit::Check(cx, args.thisv(), &kPath2DClass, &self, "Illegal invocation")
+           : !detail::ContextReceiver(cx, args, &self)) return false;
+  if (argc < 4) return WebKit::Fail(cx, "roundRect requires four coordinates");
+  double rect[4];
+  for (int i = 0; i < 4; ++i) if (!JS::ToNumber(cx, args[i], &rect[i])) return false;
+  std::vector<Radius> values;
+  bool sequence = false;
+  JS::RootedValue radii(cx, argc > 4 ? args[4] : JS::NumberValue(0));
+  if (!ConvertRadii(cx, radii, &values, &sequence)) return false;
   args.rval().setUndefined();
-  for (double n:rect) valid &= std::isfinite(n);
-  if (!valid) return true;
-  double x=rect[0],y=rect[1],w=rect[2],h=rect[3];
-  const bool reverse=(w<0)!=(h<0);
-  if (w<0) {x+=w;w=-w;std::swap(r[0],r[1]);std::swap(r[2],r[3]);}
-  if (h<0) {y+=h;h=-h;std::swap(r[0],r[3]);std::swap(r[1],r[2]);}
-  double scale=1;
-  const double edges[]={r[0].x+r[1].x,r[3].x+r[2].x,r[0].y+r[3].y,r[1].y+r[2].y};
-  for (int i=0;i<4;++i) if (edges[i]>0) scale=std::min(scale,(i<2?w:h)/edges[i]);
-  for (auto& v:r) {v.x*=scale;v.y*=scale;}
-  std::vector<Radius> points;
-  constexpr double pi=3.14159265358979323846;
-  for (int corner=0;corner<4;++corner) {
-    const double cx0=corner==0 || corner==3?x+r[corner].x:x+w-r[corner].x;
-    const double cy0=corner<2?y+r[corner].y:y+h-r[corner].y;
-    for (int i=0;i<=16;++i) {
-      double angle=pi+(corner+i/16.0)*pi/2;
-      points.push_back({cx0+r[corner].x*std::cos(angle),cy0+r[corner].y*std::sin(angle)});
-    }
+  // Step 1: a non-finite rectangle draws nothing.
+  for (double n : rect) if (!std::isfinite(n)) return true;
+  // Step 3: one to four radii.
+  if (sequence && (values.empty() || values.size() > 4))
+    return WebKit::FailKind(cx, "Can have between 1 and 4 radii", JSEXN_RANGEERR);
+  // Step 5: in order, a non-finite radius returns and a negative one throws.
+  for (const Radius& radius : values) {
+    if (!std::isfinite(radius.x) || !std::isfinite(radius.y)) return true;
+    if (radius.x < 0 || radius.y < 0)
+      return WebKit::FailKind(cx, "Radius can not be negative", JSEXN_RANGEERR);
   }
-  if (reverse) std::reverse(points.begin(),points.end());
-  std::vector<double> commands;
-  for (size_t i=0;i<points.size();++i) {
-    commands.push_back(i?1:0);commands.push_back(points[i].x);commands.push_back(points[i].y);
-  }
-  commands.push_back(2);
-  return AppendCanvasPath(cx,self,commands.data(),uint32_t(commands.size()));
+  // Steps 7-10: upperLeft, upperRight, lowerRight, lowerLeft.
+  const size_t n = values.size();
+  const Radius ul = values[0];
+  const Radius ur = n > 1 ? values[1] : values[0];
+  const Radius lr = n > 2 ? values[2] : values[0];
+  const Radius ll = n > 3 ? values[3] : n > 1 ? values[1] : values[0];
+  const double command[13] = {11.0, rect[0], rect[1], rect[2], rect[3],
+                              ul.x, ul.y, ur.x, ur.y, lr.x, lr.y, ll.x, ll.y};
+  return AppendCanvasPath(cx, self, command, 13);
 }
-}
+}  // namespace ruyijs::web_canvas

@@ -44,13 +44,21 @@ bool KeywordSize(const std::string& word, double* size) {
 bool FontKeyword(const std::string& word, CanvasFont* out) {
   if (Equals(word, "italic") || Equals(word, "oblique")) {
     out->italic = true;
+  } else if (word[0] == '-' && word.size() > 1 && word[1] >= '0' && word[1] <= '9') {
+    // A negative oblique angle.
+    return true;
   } else if (Equals(word, "bold") || Equals(word, "bolder")) {
     out->weight = 700;
   } else if (Equals(word, "lighter")) {
     out->weight = 100;
-  } else if (word.size() == 3 && word[0] >= '1' && word[0] <= '9' &&
-             word[1] >= '0' && word[1] <= '9' && word[2] == '0') {
-    out->weight = unsigned(std::atoi(word.c_str()));
+  } else if (!word.empty() && ((word[0] >= '0' && word[0] <= '9') || word[0] == '.')) {
+    // A numeric weight (1-1000), or the angle of an oblique style.
+    char* end = nullptr;
+    const double number = std::strtod(word.c_str(), &end);
+    const std::string unit(end ? end : "");
+    if (unit == "deg" || unit == "rad" || unit == "grad" || unit == "turn") return true;
+    if (!unit.empty() || !(number >= 1 && number <= 1000)) return false;
+    out->weight = unsigned(std::lround(number));
   } else if (!(Equals(word, "normal") || Equals(word, "small-caps") ||
                Equals(word, "ultra-condensed") || Equals(word, "extra-condensed") ||
                Equals(word, "condensed") || Equals(word, "semi-condensed") ||

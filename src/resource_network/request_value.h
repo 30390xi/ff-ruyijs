@@ -8,6 +8,7 @@ namespace ruyijs::resource_network {
 // because it is an interface object, not resource state.
 struct RequestDraft {
   std::string method = "GET", url, body;
+  std::string bodyType;  // Fetch "extract a body" type, added as Content-Type
   BodyKind kind = BodyKind::Text;
   bool nullBody = true;
   HeaderPairs headers;

@@ -80,20 +80,23 @@ bool BindGeometryPorts(BrowsingContext& context) {
     auto* factory = static_cast<web_geometry::Realm*>(node.factory);
     return !node.connected || !factory || factory->SvgLengthViewportSize(width, height);
   };
-  // window.scrollMaxX/Y: the document element's laid-out box, in viewport coordinates.
-  context.environment->SetScrollExtentPort([](void* raw, double* right, double* bottom) {
+  // window.scrollMaxX/Y: the viewport scroll frame's range, the root's scroll
+  // size less its client (scrollport) size.
+  context.environment->SetScrollExtentPort([](void* raw, double* maxX, double* maxY) {
     auto& owner = *static_cast<BrowsingContext*>(raw);
-    *right = *bottom = 0;
+    *maxX = *maxY = 0;
     JSObject* document = owner.document->document();
     if (!document) return true;
     JS::RootedValue value(owner.cx, JS::ObjectValue(*document));
     JS::RootedObject root(owner.cx);
     if (!owner.document->SvgLengthRoot(value, &root)) return false;
     if (!root) return true;
-    std::array<double, 4> rect{};
-    bool present = false;
-    if (!owner.geometry->MeasureElement(root, &rect, &present)) return false;
-    if (present) { *right = rect[0] + rect[2]; *bottom = rect[1] + rect[3]; }
+    document_model::OffsetGeometry geometry;
+    if (!owner.geometry->MeasureOffset(root, &geometry)) return false;
+    if (geometry.present) {
+      *maxX = std::max(0.0, std::round(geometry.scroll_width) - std::round(geometry.client_width));
+      *maxY = std::max(0.0, std::round(geometry.scroll_height) - std::round(geometry.client_height));
+    }
     return true;
   }, &context);
   web_geometry::BoxPorts boxes;

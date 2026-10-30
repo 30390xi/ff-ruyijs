@@ -19,7 +19,8 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
   const bool absolute = BoxAbsolute(node), fixed = style.Get("position") == "fixed";
   if (absolute) {
     if (positioned == kNoBox || fixed) {
-      cb = {fixed ? viewport.scroll_x : 0, fixed ? viewport.scroll_y : 0, viewport.width, viewport.height};
+      cb = {fixed ? viewport.scroll_x : 0, fixed ? viewport.scroll_y : 0,
+            viewport.ClientWidth(), viewport.ClientHeight()};
       definite_height = true;
     } else {
       const auto& ancestor = boxes[positioned];
@@ -95,8 +96,30 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
                  width, box.definite_height ? height : 0};
   const bool establishes = style.Get("position") != "static" || style.Get("transform") != "none";
   const size_t child_positioned = establishes ? index : positioned;
+  // A scroll container's scrollbars take their room from its content box
+  // (overflow:scroll always; auto once the content overflows, below).
+  const bool scroller = !inline_box && BoxScrollContainer(nodes, index);
+  const auto overflow_x = style.Get("overflow-x"), overflow_y = style.Get("overflow-y");
+  box.scrollbar = {scroller && overflow_y == "scroll" ? kBoxScrollbar : 0,
+                   scroller && overflow_x == "scroll" ? kBoxScrollbar : 0};
+  box.content[2] = std::max(0.0, box.content[2] - box.scrollbar[0]);
+  if (box.definite_height) box.content[3] = std::max(0.0, box.content[3] - box.scrollbar[1]);
   double children_height = 0, children_width = 0;
   if (!BoxReplaced(node) && !Children(index, child_positioned, depth, &children_height, &children_width)) return false;
+  if (scroller && !BoxReplaced(node)) {
+    bool again = false;
+    if (overflow_y == "auto" && box.scrollbar[0] == 0 && box.definite_height &&
+        children_height > box.content[3]) {
+      box.scrollbar[0] = kBoxScrollbar;
+      box.content[2] = std::max(0.0, box.content[2] - kBoxScrollbar);
+      again = true;
+    }
+    if (overflow_x == "auto" && box.scrollbar[1] == 0 && children_width > box.content[2]) {
+      box.scrollbar[1] = kBoxScrollbar;
+      if (box.definite_height) box.content[3] = std::max(0.0, box.content[3] - kBoxScrollbar);
+    }
+    if (again && !Children(index, child_positioned, depth, &children_height, &children_width)) return false;
+  }
   if (inline_box || (auto_width && style.Get("display") == "inline-block")) {
     box.content[2] = children_width; box.border[2] = BoxRound(children_width+extra_w);
   }
@@ -125,7 +148,24 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
   }
   if (!box.definite_height) {
     box.content[3] = BoxLimit(style, false, percent_h, children_height, extra_h);
-    box.border[3] = BoxRound(box.content[3]+extra_h);
+    box.border[3] = BoxRound(box.content[3]+extra_h+box.scrollbar[1]);
+  }
+  // Margins of the first/last in-flow children that adjoin this box's own
+  // (box_layout_flow.cpp) collapse with them: the box moves down by what its
+  // top margin gains, and its children with it.
+  self_collapse[index] = 0;
+  if (!BoxReplaced(node) && !inline_box) {
+    const double top = BoxCollapse(box.margin[0], leading[index]);
+    const double shift = top - box.margin[0];
+    box.margin[0] = top;
+    box.margin[2] = BoxCollapse(box.margin[2], trailing[index]);
+    if (shift != 0) {
+      ShiftBoxes(index, 0, shift);
+      for (const auto child : node.children)
+        if (BoxAbsolute(nodes[child]) && std::isfinite(static_y[child])) static_y[child] += shift;
+    }
+    self_collapse[index] = empty_flow[index] && box.border[3] == 0 &&
+                           AdjoinsChildren(index, true) && AdjoinsChildren(index, false);
   }
   for (const auto child : node.children)
     if (BoxAbsolute(nodes[child]) && !Place(child, box.content, box.definite_height,
@@ -134,9 +174,88 @@ bool BoxFlow::Place(size_t index, const BoxRect& containing, bool definite_heigh
         child_positioned, depth+1)) return false;
   return true;
 }
+namespace {
+// The overflow that applies to the viewport (CSS Overflow 3 §3.3): the root's,
+// or the body's when the root's is visible on both axes.
+size_t ViewportOverflowSource(const std::vector<BoxNode>& nodes) {
+  const auto visible = [&](size_t i) {
+    for (const char* name : {"overflow-x", "overflow-y"}) {
+      const auto value = nodes[i].style.Get(name);
+      if (!value.empty() && value != "visible") return false;
+    }
+    return true;
+  };
+  if (!visible(0)) return 0;
+  for (const auto child : nodes[0].children)
+    if (!nodes[child].text && nodes[child].tag == "body") return child;
+  return 0;
+}
+bool LayoutPass(const std::vector<BoxNode>& nodes, const BoxViewport& viewport,
+                std::vector<BoxLayout>* result);
+}
+bool BoxScrollContainer(const std::vector<BoxNode>& nodes, size_t index) {
+  const auto& node = nodes[index];
+  if (node.text || node.parent == kNoBox || BoxReplaced(node)) return false;
+  if (node.tag == "body" && nodes[node.parent].parent == kNoBox && ViewportOverflowSource(nodes) == index)
+    return false;
+  for (const char* name : {"overflow-x", "overflow-y"}) {
+    const auto value = node.style.Get(name);
+    if (value == "hidden" || value == "scroll" || value == "auto") return true;
+  }
+  return false;
+}
+void BoxOverflowExtent(const std::vector<BoxNode>& nodes, const std::vector<BoxLayout>& boxes,
+                       size_t index, double* right, double* bottom) {
+  std::vector<std::pair<size_t, unsigned>> stack{{index, 0}};
+  while (!stack.empty()) {
+    const auto [current, depth] = stack.back(); stack.pop_back();
+    if (depth > 256) continue;
+    for (const auto child : nodes[current].children) {
+      const auto& box = boxes[child];
+      if (!box.present) continue;
+      *right = std::max(*right, box.border[0] + box.border[2] + box.margin[1]);
+      *bottom = std::max(*bottom, box.border[1] + box.border[3] + box.margin[2]);
+      if (!nodes[child].text && !BoxScrollContainer(nodes, child)) stack.push_back({child, depth + 1});
+    }
+  }
+}
 bool ComputeBoxLayout(const std::vector<BoxNode>& nodes, const BoxViewport& viewport,
-                       std::vector<BoxLayout>* result) {
+                       std::vector<BoxLayout>* result, BoxScrollport* scrollport) {
   if (nodes.empty() || nodes.size() > 16384) return false;
+  // nsHTMLScrollFrame::ReflowContents for the viewport: lay out without
+  // scrollbars, then with each auto scrollbar the scrollable overflow needs.
+  const size_t source = ViewportOverflowSource(nodes);
+  const auto overflow_x = nodes[source].style.Get("overflow-x"), overflow_y = nodes[source].style.Get("overflow-y");
+  const auto may = [](const std::string& value) { return value != "hidden" && value != "clip"; };
+  bool vertical = overflow_y == "scroll", horizontal = overflow_x == "scroll";
+  BoxViewport pass = viewport;
+  double right = 0, bottom = 0;
+  for (int attempt = 0; attempt < 4; ++attempt) {
+    pass.client_width = std::max(0.0, viewport.width - (vertical ? kBoxScrollbar : 0));
+    pass.client_height = std::max(0.0, viewport.height - (horizontal ? kBoxScrollbar : 0));
+    if (!LayoutPass(nodes, pass, result)) return false;
+    const auto& root = (*result)[0];
+    right = root.border[0] + root.border[2] + root.margin[1];
+    bottom = root.border[1] + root.border[3] + root.margin[2];
+    BoxOverflowExtent(nodes, *result, 0, &right, &bottom);
+    const bool want_vertical = overflow_y == "scroll" ||
+        (may(overflow_y) && BoxRound(bottom) > pass.client_height);
+    const bool want_horizontal = overflow_x == "scroll" ||
+        (may(overflow_x) && BoxRound(right) > std::max(0.0, viewport.width - (want_vertical ? kBoxScrollbar : 0)));
+    if (want_vertical == vertical && want_horizontal == horizontal) break;
+    // Scrollbars only get added within one reflow (no oscillation).
+    vertical = vertical || want_vertical; horizontal = horizontal || want_horizontal;
+  }
+  if (scrollport) {
+    scrollport->client_width = pass.ClientWidth(); scrollport->client_height = pass.ClientHeight();
+    scrollport->scroll_width = std::max(scrollport->client_width, BoxRound(right));
+    scrollport->scroll_height = std::max(scrollport->client_height, BoxRound(bottom));
+  }
+  return true;
+}
+namespace {
+bool LayoutPass(const std::vector<BoxNode>& nodes, const BoxViewport& viewport,
+                std::vector<BoxLayout>* result) {
   result->assign(nodes.size(), {});
   BoxFlow flow{nodes, viewport, *result};
   flow.forced_width.assign(nodes.size(), BoxAuto());
@@ -145,6 +264,11 @@ bool ComputeBoxLayout(const std::vector<BoxNode>& nodes, const BoxViewport& view
   flow.min_content.assign(nodes.size(), BoxAuto());
   flow.static_x.assign(nodes.size(), BoxAuto());
   flow.static_y.assign(nodes.size(), BoxAuto());
-  return flow.Place(0, {0, 0, viewport.width, viewport.height}, true, 0, 0, kNoBox, 0);
+  flow.leading.assign(nodes.size(), 0);
+  flow.trailing.assign(nodes.size(), 0);
+  flow.empty_flow.assign(nodes.size(), 0);
+  flow.self_collapse.assign(nodes.size(), 0);
+  return flow.Place(0, {0, 0, viewport.ClientWidth(), viewport.ClientHeight()}, true, 0, 0, kNoBox, 0);
+}
 }
 }

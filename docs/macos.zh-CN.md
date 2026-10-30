@@ -108,12 +108,13 @@ POSIX 改动留在现有 `#ifndef _WIN32` 的非 Windows 一侧。Windows 的 `#
 
 ## 已经能用的部分
 
-- Unix socket 帧、worker 的 `posix_spawn`，以及 C ABI 客户端。
-- Core Text 字体度量和字形掩码。
+- Unix socket 帧、worker 的 `posix_spawn`，以及 C ABI 客户端。安装名是 `@rpath/libruyijs_client.dylib`，rpath 为 `@executable_path`。`ruyijs_create`、`ruyijs_call`、`ruyijs_close` 仍能解析。
+- Core Text 字体度量和字形掩码。画布填充和 `fillText` 使用浏览器 donor 里 Firefox 自己的 Skia 对象（`gfx/skia`）。字面来自这块 Core Text 字体上的 `SkMakeTypefaceFromCTFont`。纯色填充不是空的，`fillText` 留下了墨迹。
 - ImageIO 静态图：PNG、JPEG、GIF、WebP、BMP、ICO，预乘 BGRA。多帧 GIF 使用 ImageIO 已经合成好的显示帧。
 - SVG 路径边界，覆盖 M、L、C、Q、A、Z。
 - WebCrypto 的 SHA、AES-CBC、AES-GCM、HMAC、ECDSA、ECDH。ECDH 的参数字典分配失败时返回 false，调用方抛出 `OperationError`。
-- 经 donor xpcshell 的 Necko/NSS。Akamai 示例曾以 `init_real` 为真通过，协议是 HTTP/2。
+- 经 donor xpcshell 的 Necko/NSS。不带 donor 环境时，打开 `https://example.com/` 返回状态 200，协议 `h2`。Akamai 示例曾以 `init_real` 为真通过，协议是 HTTP/2。
+- `Context(tls="100".."159")` 会被接受，并作为 `NECKO_FIREFOX` 传给 xpcshell。`necko_fetch.js` 不读这个变量，所以这只 xpcshell 仍用 donor 的 Firefox 159 ClientHello。
 
 适配器重新链接之后，CreepJS 再次通过，包含 `svg` 和 `canvas 2d`，没有失败项。
 
@@ -126,7 +127,7 @@ POSIX 改动留在现有 `#ifndef _WIN32` 的非 Windows 一侧。Windows 的 `#
 | 多帧 GIF | ImageIO 的显示帧。disposal 已经应用过，所以 Windows 上被清成透明的帧，在这里可能保留背景色。解码之后，重复次数用 GIF 元数据里的值。 |
 | APNG 和动画 WebP | ImageIO 取帧，然后走同一套混合。缩放用 Core Graphics，像素保持预乘。 |
 | 图像色彩 | 显示器 ICC 来自 `CGDisplayCopyColorSpace` 和 `CGColorSpaceCopyICCData`，再交给 Firefox 的 qcms。没有配置文件时像素不变。 |
-| Canvas 文本路径 | `CTFontCreatePathForGlyph`。`fillText` 在画字形掩码之前先建这条路径。 |
+| Canvas 文本 | `CTFontCreatePathForGlyph` 仍负责轮廓。Skia 的 `fillText` 对同一块 Core Text 字体调用 `SkMakeTypefaceFromCTFont`。 |
 | 字体别名 | 只有 PostScript 名和字体族都匹配时，才把 `Osaka-Mono` 映射到 `Osaka`。这是 Firefox 的单字体列表，不是新写的一张表。 |
 | COLR 与 CPAL | 只做 COLR 版本 0 和 CPAL 调色板 0。表字节来自 `CTFontCopyTable`。不做 COLRv1。 |
 | 字形 gamma | `SystemTextGamma` 仍是 1.8，`SystemTextContrast` 仍是 1.0。可以读 `gasp` 和 `maxp`。掩码不伪造 DirectWrite 的渲染模式。 |
@@ -137,20 +138,20 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 
 ## 和 Windows 的比对
 
-对照提交 `045752e` 的 Windows x64 表面。写着「同一份源码」的行，两边都还没做完。
+对照上游 0.2.1。写着「同一份源码」的行，两边都还没做完。这张表描述的是合并后的 macOS 外壳。上一份本地 wheel 和运行时压缩包没有重打，那份压缩包也不是 0.2.1。
 
 | 表面 | Windows | macOS |
 | --- | --- | --- |
 | JS 上下文、DOM、指纹、时钟、Python 桥 | 已实现 | 同一套 API |
-| Necko HTTP/1.1 与 HTTP/2 | 已实现 | 已验收。一条 HTTPS 帧返回状态 200、版本码 20 |
-| HTTP/3 | README 把它写进 Necko 传输 | donor 的 XUL 含有 neqo。socket process 关闭时版本码停在 20；打开后这只 xpcshell 会关掉管道 |
-| TLS 配置 100–159 | README 有描述。这份源码里没有选择器 | donor 的 Firefox 159 NSS ClientHello |
+| Necko HTTP/1.1 与 HTTP/2 | 已实现 | 已验收，且没有 donor 环境。一次页面导航返回状态 200、版本码 20（`h2`） |
+| HTTP/3 | README 把它写进 Necko 传输 | donor 的 XUL 含有 neqo。socket process 关闭时，直连的两次请求在响应带上 `h3` 的 `alt-svc` 之后仍是版本码 20。打开后这只 xpcshell 以信号 11 退出，日志是空的。没有加偏好设置 |
+| TLS 配置 100–159 | `Context(tls=)` | 同一个参数。它被写进 xpcshell 的 `NECKO_FIREFOX`。这只 xpcshell 的脚本不读它，ClientHello 仍是 donor 的 Firefox 159 |
 | WebCrypto：SHA、AES-CBC、AES-GCM、HMAC、ECDSA、ECDH | CNG | CommonCrypto 与 Security.framework |
 | 静态图：PNG、JPEG、GIF、WebP、BMP、ICO | WIC | ImageIO，预乘 BGRA |
 | 多帧 GIF | WIC disposal。被清掉的帧可以是透明的 | ImageIO 显示帧。同一区域可能留下背景色。重复次数来自 GIF 元数据 |
 | APNG 与动画 WebP | 共用的混合 | ImageIO 取帧后再走这套混合。Core Graphics 缩放后像素仍是预乘的 |
 | 图像色彩 | 显示器配置文件，再交给 qcms | `CGDisplayCopyColorSpace` 与 `CGColorSpaceCopyICCData`，再交给 qcms。没有配置文件时像素不变 |
-| Canvas 文本路径与 `fillText` | DirectWrite 轮廓 | `CTFontCreatePathForGlyph`，然后画字形掩码 |
+| Canvas 文本路径与 `fillText` | Skia，DirectWrite 字面 | 浏览器 donor 里的 Skia 对象。字面是 `SkMakeTypefaceFromCTFont`。轮廓仍走 `CTFontCreatePathForGlyph` |
 | `strokeText` | 不绘制 | 不绘制 |
 | 字体别名 | 平台字体列表 | PostScript 名和字体族都匹配时，`Osaka-Mono` 映射到 `Osaka`。这一条来自 Firefox 的单字体列表 |
 | COLR 与 CPAL | 版本 0，调色板 0 | 版本 0，调色板 0。表字节来自 `CTFontCopyTable` |
@@ -158,8 +159,8 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 | WebTransport | 与 Mac 共用的 C++。树里没有 `webtransport_worker.py` | 同一份源码。真正的会话走上面那条 HTTP/3 |
 | WebCodecs、音频解码、WebGPU、iframe 导航、自定义内置元素、XML、表单目标 | 同一份源码 | 只有接口，或者明确返回未实现 |
 | DataDome 首页 | 服务端评分 | 服务端评分。示例的通过条件不变 |
-| 安装 | PyPI 的 `win_amd64` wheel | 本地 `macosx_26_0_arm64` wheel。`runtime.json` 记下大小和 sha256。URL 为空 |
-| C ABI 客户端 | 外壳旁边的 DLL | `libruyijs_client.dylib` 的安装名仍是编译机上的绝对路径。Python 按文件路径加载它 |
+| 安装 | PyPI 的 0.2.1 `win_amd64` wheel | 上一份本地 `macosx_26_0_arm64` wheel 没有重打。`runtime.json` 的 `macos.url` 仍为空。里面的 macOS 大小和 sha256 属于那份旧压缩包，不是这个 0.2.1 外壳 |
+| C ABI 客户端 | 外壳旁边的 DLL | `libruyijs_client.dylib` 的安装名是 `@rpath/libruyijs_client.dylib`，rpath 为 `@executable_path`。XUL、xpcshell、NSS 的安装名保持 Firefox 写好的样子 |
 
 `image_wic.h` 里仍有一段 POSIX 桩。macOS 的解码走 `image_codec.cpp` 和 `image_gif.cpp` 里的 ImageIO。
 
@@ -167,12 +168,12 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 
 外壳按 `macosx_26_0_arm64` 链接。Linux、Intel Mac，以及低于 macOS 26 的系统不在这份计划里。新行为只接到已经在用的 Firefox donor 或系统框架：ImageIO、Core Text、Core Graphics、CommonCrypto、Security。
 
-1. HTTP/3。继续用 donor 的 socket process，并从这份构建已经写出的日志里记下 xpcshell 关掉管道的原因。验收结果是版本码 30。这只 xpcshell 如果带不起那个进程，就记下来并停在这里。WebTransport 跟着这个结果走。
-2. TLS 配置。先找到 Windows 上已有的 100–159 选择器，再考虑 Mac 偏好。只有 Firefox 159 donor 里已经带有这些配置时，才在 macOS 上暴露它。在那之前，Mac 的 ClientHello 就是这份 donor 的 NSS。
-3. C 客户端安装名。`libruyijs_client.dylib` 由本仓库编出。把它的安装名改成 `@rpath/libruyijs_client.dylib`，并保留 `@executable_path`。XUL、xpcshell 和 NSS 的安装名保持 Firefox 写好的样子。
+1. HTTP/3 这一轮结束。socket process 关闭时，直连请求和紧接着的下一次都停在版本码 20，尽管响应已经通告 `h3`。打开 socket process 后，这只 xpcshell 以信号 11 退出，日志是空的。没有提交偏好，也没有加第二套 QUIC。WebTransport 仍要等真正的版本码 30。
+2. TLS 配置。`Context(tls=)` 是上游参数，会作为 `NECKO_FIREFOX` 传给子进程。这只 xpcshell 不读它，所以没有第二张 ClientHello 表。停在这里，不加 JA3 开关。
+3. C 客户端安装名已经完成。`otool -D` 打印 `@rpath/libruyijs_client.dylib`，rpath 是 `@executable_path`。
 4. 图像像素。继续用 ImageIO。可以用一条夹具记下 GIF 背景色差异。只有 ImageIO 已经提供对应 disposal 时才改像素。
-5. 字体别名。只增加 `gfxMacPlatformFontList.mm` 里 `InitAliasesForSingleFaceList` 已经列出的名字。
-6. 发布。在真实的压缩包地址出现之前，`runtime.json` 的 `macos.url` 保持为空。COLRv1 等到 Windows 的解析越过版本 0 再做。
+5. 字体别名。Mac 只保留 `Osaka-Mono` 到 `Osaka`。字体选择仍走 Core Text 回退。上游的语言偏好、SimSun 和 Arial 列表留在 `font_collection.cpp` 的 Windows 一侧。
+6. 发布。`runtime.json` 的 `macos.url` 保持为空。那里记下的压缩包是上一份外壳，不是 0.2.1。这一轮不重打 wheel，也不重打压缩包。COLRv1、Linux、Intel Mac，以及低于 macOS 26 的系统都不做。
 
 ## 不要提交的东西
 

@@ -1,5 +1,6 @@
 #include <cmath>
 #include "execution_scheduling/performance.h"
+#include "execution_scheduling/timer_precision.h"
 #include "execution_scheduling/navigation_timing.h"
 #include "runtime/page_helpers.h"
 #include "runtime/web_kit.h"
@@ -61,12 +62,22 @@ bool PerfIllegalConstructor(JSContext* cx,unsigned argc,JS::Value* vp) {
  auto args=JS::CallArgsFromVp(argc,vp);NativeConstructorTrace trace(cx,args);
  return Error(cx,"Illegal constructor.");
 }
+int64_t PerfTimelineSeed(JSObject* owner) {
+ return int64_t(uint64_t(uint32_t(JS::GetReservedSlot(owner,PSeedLow).toInt32()))|
+                (uint64_t(uint32_t(JS::GetReservedSlot(owner,PSeedHigh).toInt32()))<<32));
+}
+double PerfReduce(JSObject* owner,double ms) {
+ auto* state=static_cast<State*>(JS::GetReservedSlot(owner,PClock).toPrivate());
+ if(state->model.Clock().logical)return std::floor(ms);
+ return ReduceContentTime(ms,PerfTimelineSeed(owner));
+}
+// Performance::Now: the unclamped time since the origin through
+// nsRFPService::ReduceTimePrecisionAsMSecs with this document's seed.
 double PerfNow(JS::HandleObject self) {
  auto* state=static_cast<State*>(JS::GetReservedSlot(self,PClock).toPrivate());
- // Firefox reduces timer precision to 1 ms outside cross-origin isolation.
  state->SyncClock();
  const auto snapshot=state->model.Inspect();
  const double origin=PerfTimeOrigin(self);
- return std::floor(snapshot.epoch+snapshot.now-origin);
+ return PerfReduce(self,snapshot.epoch+snapshot.now-origin);
 }
 }

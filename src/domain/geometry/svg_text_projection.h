@@ -21,9 +21,14 @@ struct Measurement {
   float box[4], first[4], transformed[4];
   double unrounded[4];
 };
+// `descent` is the primary font's rounded maxDescent (the run's font box);
+// `frameDescent` is nsFontMetrics::MaxDescent (widened to hold the underline),
+// the text frame's block size that the ink overflow margins are measured from.
 inline Measurement ProjectInk(InkBox ink, double advance, double firstAdvance,
-    double ascent, double descent, float factor, bool italic, double x, double y) {
+    double ascent, double descent, float factor, bool italic, double x, double y,
+    double frameDescent = -1) {
   const double height = ascent + descent;
+  const double frameHeight = ascent + (frameDescent < 0 ? descent : frameDescent);
   if (italic) {
     const float skew = float(std::tan(14.0 * 3.14159265358979323846 / 180));
     ink.left -= std::ceil(skew * ink.bottom);
@@ -33,11 +38,18 @@ inline Measurement ProjectInk(InkBox ink, double advance, double firstAdvance,
   const double left = std::max(0.0, -std::floor(ink.left));
   const double right = std::max(0.0, std::ceil(ink.right) - advance);
   const double top = std::max(0.0, -std::floor(ink.top + ascent));
-  const double bottom = std::max(0.0, std::ceil(ink.bottom + ascent) - height);
+  const double bottom = std::max(0.0, std::ceil(ink.bottom + ascent) - frameHeight);
   const auto round = [](double v) { return std::floor(v + .5); };
-  const double app[4] = {round(ink.left) - left, round(ink.top + ascent) - top,
-    round(ink.right - ink.left) + left + right,
-    round(ink.bottom - ink.top) + top + bottom};
+  // TextRenderedRun::GetRunUserSpaceRect: the loose ink box united with the
+  // font box (0, -ascent, advance, ascent + descent), rounded to app units,
+  // then inflated by the frame's ink overflow margins above.
+  const double unionLeft = std::min(ink.left, 0.0);
+  const double unionTop = std::min(ink.top, -ascent);
+  const double unionRight = std::max(ink.right, advance);
+  const double unionBottom = std::max(ink.bottom, height - ascent);
+  const double app[4] = {round(unionLeft) - left, round(unionTop + ascent) - top,
+    round(unionRight - unionLeft) + left + right,
+    round(unionBottom - unionTop) + top + bottom};
   float fill[4];
   for (unsigned i = 0; i < 4; ++i) fill[i] = float(double(float(app[i] / 60)) / factor);
   const double translationY = y - ascent / 60 / double(factor);

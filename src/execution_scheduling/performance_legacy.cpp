@@ -20,19 +20,30 @@ const NavigationTiming* Record(JS::HandleObject self) {
 // document's origin and every other field is an offset from it.
 double Field(const NavigationTiming* record,double origin,unsigned field) {
  if(!record)return 0;
+ // nsDOMNavigationTiming: a document milestone not reached yet reads 0, not
+ // navigationStart (a script running during parsing sees domInteractive 0).
+ const auto reached=[&](double offset){return offset>0?origin+offset:0.0;};
  switch(field) {
   case 0: return origin;                                  // navigationStart
   case 5: return origin+record->fetch_start.value_or(record->request_start);
+  // domainLookupStart/End, connectStart/End, secureConnectionStart: measured,
+  // or (no measurement) fetchStart; secureConnectionStart is 0 without TLS.
+  case 6: case 7: case 8: case 9: case 10: {
+   const double fetch=origin+record->fetch_start.value_or(record->request_start);
+   if(!record->establishment)return field==10&&record->name.rfind("https:",0)!=0?0:fetch;
+   const double values[]={record->dns_start,record->dns_end,record->connect_start,record->connect_end,record->secure_start};
+   return field==10&&values[4]==0?0:origin+values[field-6];
+  }
   case 11: return origin+record->request_start;            // requestStart
   case 12: return origin+record->response_start;           // responseStart
   case 13: return origin+record->response_end;             // responseEnd
   case 14: return origin+record->response_end;             // domLoading
-  case 15: return origin+record->dom_interactive;          // domInteractive
-  case 16: return origin+record->dom_content_loaded_start;
-  case 17: return origin+record->dom_content_loaded_end;
-  case 18: return origin+record->dom_complete;             // domComplete
-  case 19: return origin+record->load_event_start;
-  case 20: return origin+record->load_event_end;
+  case 15: return reached(record->dom_interactive);        // domInteractive
+  case 16: return reached(record->dom_content_loaded_start);
+  case 17: return reached(record->dom_content_loaded_end);
+  case 18: return reached(record->dom_complete);           // domComplete
+  case 19: return reached(record->load_event_start);
+  case 20: return record->load_event_finished?reached(record->load_event_end):0;
   default: return 0;                                       // unload/redirect/TLS
  }
 }

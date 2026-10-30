@@ -19,11 +19,8 @@ namespace {
 bool ScrollLimit(State& state, double* maxX, double* maxY) {
   *maxX = *maxY = INFINITY;
   if (!state.scrollExtent) return true;
-  double width = 0, height = 0, right = 0, bottom = 0;
-  if (!state.ReadViewport(&width, &height) ||
-      !state.scrollExtent(state.scrollExtentContext, &right, &bottom)) return false;
-  // The extent is in viewport coordinates, so it moves with the current scroll.
-  const double x = right + state.scrollX - width, y = bottom + state.scrollY - height;
+  double x = 0, y = 0;
+  if (!state.scrollExtent(state.scrollExtentContext, &x, &y)) return false;
   *maxX = std::max(0.0, std::round(std::isfinite(x) ? x : 0));
   *maxY = std::max(0.0, std::round(std::isfinite(y) ? y : 0));
   return true;

@@ -177,7 +177,10 @@ class Native:
 
     def compile(self, source, name, exceptions=False):
         output = self.directory / f"{name}{self.donor.object_suffix}"
-        if name == "geometry_harfbuzz":
+        if name == "web_canvas_skia_target":
+            import skia_native
+            flags = skia_native.compile_flags(self.donor, self.root, self.directory)
+        elif name == "geometry_harfbuzz":
             from geometry_fonts import FLAGS
             include = "-I" + str(self.donor.src / "gfx/harfbuzz/src")
             if self.donor.windows:

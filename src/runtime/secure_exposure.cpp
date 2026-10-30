@@ -12,6 +12,9 @@ bool ConfigureSecureExposure(BrowsingContext& context) {
   std::string language;
   if (!context.environment->ReadLanguage(&language)) return false;
   web_geometry::SetBrowserLanguage(language);
+  double ratio = 1;
+  if (!context.environment->ReadDevicePixelRatio(&ratio)) return false;
+  web_geometry::SetDevicePixelRatio(ratio);
   domain::styling::CssSetInitialFontFamily(web_geometry::DefaultGenericFamily());
   return web_crypto::ConfigureExposure(context.cx, context.page) &&
          web_geolocation::ConfigureExposure(context.cx, context.page) &&

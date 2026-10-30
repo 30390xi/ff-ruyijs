@@ -46,7 +46,9 @@ static bool Get(JSContext* cx, unsigned argc, JS::Value* vp, Property property,
     case Composed: args.rval().setBoolean(value.composed()); break;
     case DefaultPrevented: args.rval().setBoolean(value.default_prevented()); break;
     case Trusted: args.rval().setBoolean(value.is_trusted()); break;
-    case Timestamp: args.rval().setDouble(value.time_stamp()); break;
+    // Event::TimeStamp: ReduceTimePrecisionAsMSecs with the document's seed.
+    case Timestamp: args.rval().setDouble(state->eventReduce
+        ? state->eventReduce(state->eventClockContext, value.time_stamp()) : value.time_stamp()); break;
     case CancelBubble: args.rval().setBoolean(value.propagation_stopped()); break;
     case ReturnValue: args.rval().setBoolean(!value.default_prevented()); break;
   }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdlib>
+#include <set>
 #include "domain/shared/aggregate_root.h"
 #include "domain/shared/domain_event.h"
 #include "domain/styling/css_rule_value.h"
@@ -388,6 +390,52 @@ public:
             candidate.order = order++;
             winners["display"] = candidate;
         }
+        {
+            // nsStyleFont::mLanguage: the element's own lang (xml:lang first, as
+            // nsIContent::GetLang reads it) as the internal inherited -x-lang.
+            auto lang = element.attributes.find("xml:lang");
+            if (lang == element.attributes.end()) lang = element.attributes.find("lang");
+            if (lang != element.attributes.end()) {
+                Candidate candidate;
+                candidate.value = detail::TrimAscii(lang->second);
+                if (candidate.value.empty()) candidate.value = "-x-none";
+                candidate.order = order++;
+                Consider(&winners, "-x-lang", candidate);
+            }
+        }
+        if (!element.html) {
+            // SVG presentation attributes (SVGElement::UpdateMappedDeclarationBlock):
+            // author-level declarations below every author rule, so any matching
+            // selector, even `*`, overrides them by source order.
+            static const std::set<std::string> kPresentation = {
+                "alignment-baseline", "baseline-shift", "clip-path", "clip-rule", "color",
+                "color-interpolation", "color-interpolation-filters", "cursor", "direction",
+                "display", "dominant-baseline", "fill", "fill-opacity", "fill-rule", "filter",
+                "flood-color", "flood-opacity", "font-family", "font-size", "font-size-adjust",
+                "font-stretch", "font-style", "font-variant", "font-weight", "image-rendering",
+                "letter-spacing", "lighting-color", "marker-end", "marker-mid", "marker-start",
+                "mask", "opacity", "overflow", "paint-order", "pointer-events", "shape-rendering",
+                "stop-color", "stop-opacity", "stroke", "stroke-dasharray", "stroke-dashoffset",
+                "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stroke-opacity",
+                "stroke-width", "text-anchor", "text-decoration", "text-rendering", "unicode-bidi",
+                "vector-effect", "visibility", "word-spacing", "writing-mode"};
+            for (const auto& attribute : element.attributes) {
+                if (!kPresentation.count(attribute.first)) continue;
+                std::string value = detail::TrimAscii(attribute.second);
+                if (value.empty()) continue;
+                // SVG parses presentation lengths in quirks mode: a bare number is px.
+                if (attribute.first == "font-size" || attribute.first == "stroke-width" ||
+                    attribute.first == "letter-spacing" || attribute.first == "word-spacing") {
+                    char* end = nullptr;
+                    std::strtod(value.c_str(), &end);
+                    if (end && end != value.c_str() && *end == 0) value += "px";
+                }
+                Candidate candidate;
+                candidate.value = value;
+                candidate.order = order++;
+                Consider(&winners, attribute.first, candidate);
+            }
+        }
         for (const auto* sheet : sheets) {
             if (!sheet || sheet->disabled()) continue;
             // Only the buckets this element can match, visited in source
@@ -517,12 +565,12 @@ public:
         if (property.size() > 2 && property.compare(0, 2, "--") == 0) return true;
         for (const auto& font : CssFontDefaults()) if (font.name == property) return true;
         static const std::vector<std::string> names = {
-            "color", "font-family", "font-size", "font-style", "font-variant",
+            "-x-lang", "color", "font-family", "font-size", "font-style", "font-variant",
             "font-weight", "line-height", "letter-spacing", "word-spacing", "text-align",
             "text-indent", "text-transform", "white-space", "visibility", "cursor",
             "direction", "list-style", "list-style-type", "list-style-position",
             "list-style-image", "quotes", "border-collapse", "border-spacing",
-            "caption-side", "empty-cells", "orphans", "widows"};
+            "caption-side", "empty-cells", "orphans", "widows", "text-rendering"};
         return std::find(names.begin(), names.end(), property) != names.end();
     }
 

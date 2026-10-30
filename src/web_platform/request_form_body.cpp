@@ -26,7 +26,7 @@ std::string Quote(const std::string& value) {
   return out;
 }
 bool Append(RequestBody* out, const std::string& text) {
-  if (text.size() > kRequestBodyLimit - out->bytes.size()) {
+  if (text.size() > out->limit - out->bytes.size()) {
     out->tooLarge = true;
     return false;
   }
@@ -62,6 +62,7 @@ bool ReadFormRequestBody(JSContext* cx, JS::HandleObject form, RequestBody* out)
       JS::RootedValue filename(cx, JS::GetReservedSlot(file, kFileSlotName));
       std::string label;
       RequestBody body;
+      body.limit = out->limit;
       if (!ReadRequestText(cx, filename, &label) || !ReadRequestBody(cx, value, &body)) return false;
       if (body.tooLarge) { out->tooLarge = true; return true; }
       if (!Append(out, "; filename=\"" + Quote(label) + "\"\r\nContent-Type: " +

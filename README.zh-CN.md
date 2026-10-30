@@ -97,6 +97,7 @@ with Context(proxy="http://127.0.0.1:7890") as context:
 Python  ──►  ruyiJS Context（独立进程）  ──►  目标站点
                  ├─ SpiderMonkey —— Firefox 159 JS 引擎
                  ├─ 38 个浏览器上下文 —— DOM · Canvas · Worker · iframe · …
+                 ├─ Skia —— Firefox 159 2D 图形，Canvas 的绘制后端
                  └─ Necko —— HTTP/1.1 · 2 · 3，按上下文独立代理
 ```
 
@@ -148,13 +149,19 @@ with Context() as context:
 
 Necko 传输层可**自由切换 Firefox 100 – 159 的 TLS 配置**，每个版本均精确复现该版本的 ClientHello，在线上呈现不同的 JA3 / JA4 指纹——可用于轮换浏览器身份、规避按版本封禁，或测试站点对不同 Firefox 版本的反应。
 
+每个 Context 用 `tls=` 选择版本（`"100"`–`"159"`，默认 159）。它只改变该 Context 的 Necko 传输层的 TLS ClientHello、HTTP/2 设置和 HTTP/3 优先级；如需页面内一致，请用 `configure_fingerprint` 设置对应版本的 User-Agent。
+
 ```python
-with Context(proxy="http://127.0.0.1:7890", timeout=30) as context:
+with Context(proxy="http://127.0.0.1:7890", timeout=30, tls="120") as context:
     context.load_page("https://example.com/", "")
     context.eval("globalThis.r = null; fetch('/api').then(x => x.json()).then(v => r = v)")
     context.advance(25)               # 推进事件循环直到稳定
     print(context.eval("r"))
 ```
+
+### Canvas 使用 Firefox 原生 Skia
+
+Canvas 2D 使用 Firefox 官方的 **Skia**（Firefox 159 正式版的 `gfx/skia`）绘制，而不是重新实现。
 
 ### Python ↔ JavaScript 互通
 
@@ -300,7 +307,7 @@ python -m ruyijs.examples creepjs
 <table>
 <tr>
 <td align="center"><img src="assets/wechat-qr.jpg" alt="微信 — 如意" width="220"><br><b>微信：</b>如意</td>
-<td align="center"><img src="assets/wechat-group-qr.jpg" alt="交流群 — AI 浏览器过检测交流群" width="220"><br><b>交流群：</b>AI 浏览器过检测交流群</td>
+<td align="center"><img src="assets/wechat-group-qr.jpg" alt="交流群 — AI浏览器ruyijs过检测交流群3" width="220"><br><b>交流群：</b>AI浏览器ruyijs过检测交流群3</td>
 </tr>
 </table>
 

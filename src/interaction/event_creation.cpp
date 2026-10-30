@@ -123,8 +123,7 @@ bool Realm::CreateLegacyEvent(std::u16string_view name, JS::HandleObject view,
   // keeps that bit. Its public constructor retains its existing defaults.
   event->value.set_composed(type.iface == Iface::Focus);
   event->value.mark_uninitialized();
-  event->value.set_time_stamp(std::chrono::duration<double, std::milli>(
-      std::chrono::steady_clock::now() - state.started).count());
+  event->value.set_time_stamp(state.EventTime());
   state.events.push_back(std::move(event));
   result.setObject(*object);
   return true;

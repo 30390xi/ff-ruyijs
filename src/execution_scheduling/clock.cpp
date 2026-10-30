@@ -1,4 +1,5 @@
 #include "execution_scheduling/state.h"
+#include "execution_scheduling/timer_precision.h"
 #include <algorithm>
 #include <cmath>
 #include <thread>
@@ -17,6 +18,9 @@ static bool OwnsRealm(const State& s, JS::Realm* realm) {
     if (realm && realm == JS::GetObjectRealmOrNull(installed)) return true;
   return false;
 }
+// nsRFPService::ReduceTimePrecisionAsUSecsWrapper: Date's absolute time with
+// a zero mix-in at content precision; the host realm (caller type 1, the
+// system principal) keeps full precision.
 static double CurrentTime(double usec, JS::RTPCallerTypeToken token, JSContext* cx) {
   JS::Realm* realm = JS::GetCurrentRealmOrNull(cx);
   for (State* s = activeState; s; s = s->previous) {
@@ -25,7 +29,10 @@ static double CurrentTime(double usec, JS::RTPCallerTypeToken token, JSContext* 
     if (clock.logical) return std::trunc(clock.epoch + clock.now) * 1000;
     break;
   }
-  return previousClock ? previousClock(usec, token, cx) : usec;
+  if (token.value == 1) return previousClock ? previousClock(usec, token, cx) : usec;
+  using namespace domain::execution_scheduling;
+  return ReduceTimePrecision(ProcessTimerSecret(), usec, TimeScale::MicroSeconds,
+                             kTimerResolutionUSec, 0);
 }
 void State::BindClock() {
   JS::SetRealmReduceTimerPrecisionCallerType(JS::GetCurrentRealmOrNull(cx), {1});

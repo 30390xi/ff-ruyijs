@@ -48,5 +48,17 @@ struct BoxFlow {
   // (or past the budget) the item box is resized in place instead.
   bool Relayout(size_t, bool height);
   void Resize(size_t, bool height, double content_size);
+  // CSS 2 §8.3.1 margin collapsing in block flow: whether a block container's
+  // top/bottom margin adjoins its in-flow children's (no border, padding, or
+  // new block formatting context between them).
+  bool AdjoinsChildren(size_t, bool top) const;
+  // Per node: the collapsed margins its block flow passed up through its top
+  // and bottom edges, and whether it has no in-flow content (self-collapsing).
+  std::vector<double> leading{}, trailing{};
+  std::vector<char> empty_flow{}, self_collapse{};
 };
+// The collapsed result of two adjoining margins (CSS 2 §8.3.1).
+inline double BoxCollapse(double a, double b) {
+  return std::max({a, b, 0.0}) + std::min({a, b, 0.0});
+}
 }

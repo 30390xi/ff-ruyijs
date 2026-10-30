@@ -1,6 +1,6 @@
-// The 2D path members and clearRect. There is no rasterizer here, so the path
-// members record the geometry the script builds into a real command list kept on
-// the context; clearRect erases the one real byte store. Rasterizing, text,
+// The 2D path members and clearRect. The path members record the geometry the
+// script builds into a command list kept on the context, which the Skia bridge
+// replays; clearRect clears through the same bridge. Rasterizing, text,
 // gradient and text resources have their own native member files (D35).
 #include "web_canvas/internal.h"
 
@@ -61,30 +61,6 @@ bool AppendCanvasPath(JSContext* cx, JS::HandleObject context, const double* val
 }
 namespace {
 
-// clearRect erases to transparent black. That needs no colour parsing, so it is
-// the one painting operation this domain performs on the real bytes.
-bool ClearRect(State& state, JS::HandleObject self, const double rect[4]) {
-  if (!(rect[2] > 0.0) || !(rect[3] > 0.0)) return true;
-  CanvasBinding* binding = detail::BindingOf(state, self);
-  JSObject* bitmap = detail::BitmapOf(binding);
-  if (!binding || !bitmap) return true;
-  const int64_t left = std::max<int64_t>(0, int64_t(std::floor(rect[0])));
-  const int64_t top = std::max<int64_t>(0, int64_t(std::floor(rect[1])));
-  const int64_t right =
-      std::min<int64_t>(int64_t(binding->width), int64_t(std::ceil(rect[0] + rect[2])));
-  const int64_t bottom =
-      std::min<int64_t>(int64_t(binding->height), int64_t(std::ceil(rect[1] + rect[3])));
-  if (right <= left || bottom <= top) return true;
-  bool shared = false;
-  JS::AutoCheckCannotGC nogc;
-  uint8_t* data = static_cast<uint8_t*>(JS_GetArrayBufferViewData(bitmap, &shared, nogc));
-  if (!data) return true;
-  const size_t stride = size_t(binding->width) * 4u;
-  for (int64_t row = top; row < bottom; ++row)
-    std::memset(data + size_t(row) * stride + size_t(left) * 4u, 0,
-                size_t(right - left) * 4u);
-  return true;
-}
 }  // namespace
 
 bool Context2DPathMethod(JSContext* cx, unsigned argc, JS::Value* vp) {
@@ -109,7 +85,7 @@ bool Context2DPathMethod(JSContext* cx, unsigned argc, JS::Value* vp) {
     double rect[4];
     bool usable = false;
     if (!detail::ReadNumbers(cx, args, 0, 4, rect, &usable)) return false;
-    return !usable || ClearRect(state, self, rect);
+    return !usable || ClearRecordedRect(state, self, rect);
   }
   if (spec.kind == kMove || spec.kind == kLine) {
     double point[2];

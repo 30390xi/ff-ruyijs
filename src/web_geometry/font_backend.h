@@ -33,6 +33,11 @@ constexpr BOOL TRUE = 1;
 inline bool SUCCEEDED(HRESULT value) { return value >= 0; }
 inline bool FAILED(HRESULT value) { return value < 0; }
 inline uint32_t _byteswap_ulong(uint32_t value) { return __builtin_bswap32(value); }
+// DirectWrite packs the first character in the low byte. TryGetFontTable
+// swaps that value back to a Core Text OSType.
+#define DWRITE_MAKE_OPENTYPE_TAG(a, b, c, d) \
+  ((UINT32(uint8_t(d)) << 24) | (UINT32(uint8_t(c)) << 16) | \
+   (UINT32(uint8_t(b)) << 8) | UINT32(uint8_t(a)))
 struct DWRITE_FONT_METRICS {
   uint16_t designUnitsPerEm = 0;
   uint16_t ascent = 0;
@@ -172,4 +177,16 @@ bool ShapeFont(const SelectedFont&, const FontInput&, const std::u16string&, Fon
 bool CanvasFontBaselines(const SelectedFont&, const FontInput&, CanvasTextMetrics*);
 bool MissingFontRun(const SelectedFont&, const FontInput&, uint32_t codepoint,
                     size_t units, FontRun*);
+
+// nsFontMetrics::MaxDescent in device pixels: ComputeMaxDescent over the
+// sanitized underline (gfxFont::SanitizeMetrics) and the rounded descent.
+double FrameMaxDescent(const DWRITE_FONT_METRICS& metrics, double conv, double maxAscent,
+                       double maxDescent, IDWriteFontFace* face = nullptr, double size = 0);
+// font_preferences.cpp: gfxFontGroup::WhichPrefFontSupportsChar's families
+// for a character, and the emoji preference list.
+std::vector<std::wstring> PrefFallbackFamilies(uint32_t codepoint, const FontInput&);
+std::vector<std::wstring> EmojiFallbackFamilies();
+// gfxWindowsPlatform::GetCommonFallbackFonts: the per-script system fallback
+// families tried before the global font scan. The names are the Windows list.
+std::vector<std::wstring> CommonFallbackFamilies(uint32_t codepoint);
 }

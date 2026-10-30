@@ -13,7 +13,8 @@ from wheel_runtime import obtain_runtime, validate, digest
 
 # Captured third-party responses and cookies used only for offline replay stay out of the wheel.
 EXAMPLES_EXCLUDED = shutil.ignore_patterns("__pycache__", "*.pyc", "fixture", "interstitial_fixture",
-                                           "replay.py", "interstitial.py", "interstitial_solve.py")
+                                           "replay.py", "interstitial.py", "interstitial_solve.py",
+                                           "*_result.json")
 
 
 class PlatformDistribution(Distribution):
@@ -68,7 +69,7 @@ class BuildPython(build_py):
             shutil.rmtree(examples)
         shutil.copytree(Path(__file__).resolve().parent / "examples", examples, ignore=EXAMPLES_EXCLUDED)
         registry = Path(__file__).resolve().parent / "python/ruyijs/examples"
-        shutil.copytree(registry, examples, dirs_exist_ok=True)
+        shutil.copytree(registry, examples, dirs_exist_ok=True, ignore=EXAMPLES_EXCLUDED)
         readme = examples / "DataDome/README.md"
         if readme.is_file():
             readme.write_text(

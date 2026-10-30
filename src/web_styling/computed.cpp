@@ -22,8 +22,11 @@ using document_model::StyleMember;
 // so appending them here is a single string copy, not a per-element rebuild.
 std::string BuildComputedBlock(const ComputedStyle& computed) {
   std::string block;
-  for (const auto& entry : computed.values)
+  for (const auto& entry : computed.values) {
+    // -x-lang is the internal language of nsStyleFont, not a CSS property.
+    if (entry.first == "-x-lang") continue;
     block += detail::Serialize(entry.first, entry.second, false);
+  }
   block += computed.customsText;
   return block;
 }

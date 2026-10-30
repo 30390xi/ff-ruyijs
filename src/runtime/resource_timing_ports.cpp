@@ -43,9 +43,21 @@ bool Record(void* opaque,const resource_network::HttpObservation& observation){
  record.responseStatus=uint16_t(result.status);
  record.contentType=Header(result.headers,"content-type");
  auto end=record.contentType.find(';');if(end!=std::string::npos)record.contentType.resize(end);
+ // DNS/connect/TLS are unmeasured: Firefox reads a null channel timestamp as
+ // fetchStart (TimeStampToReducedDOMHighResOrFetchStart), and
+ // secureConnectionStart as 0 without TLS. Request/response values above come
+ // from the original transport.
+ const auto& last=hops.back();
+ const auto or_fetch=[&](double v){return v>0?v:record.fetchStart;};
+ record.domainLookupStart=or_fetch(last.domainLookupStart);
+ record.domainLookupEnd=last.domainLookupEnd>0?last.domainLookupEnd:record.domainLookupStart;
+ record.connectStart=last.connectStart>0?last.connectStart:record.domainLookupEnd;
+ record.connectEnd=last.connectEnd>0?last.connectEnd:record.connectStart;
+ record.secureConnectionStart=UrlValue(last.url).protocol()!="https:"?0:
+   last.secureStart>0?last.secureStart:record.connectEnd;
+ if(record.requestStart==0)record.requestStart=record.fetchStart;
+ if(record.responseStart==0)record.responseStart=record.requestStart;
  access.Apply(record,result.transferred,result.opaqueRedirect);
- // DNS/connect/TLS remain unmeasured; request/response values above come from
- // the original transport and must never be copied from fetchStart.
  // Firefox exposes a child document's navigation request as a resource entry
  // on the embedding document. Keep the child Performance timeline local for
  // subresources, but route iframe navigation observations to its parent.

@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- `docs/macos.md` and `docs/macos.zh-CN.md` record the Windows comparison and the follow-up plan. HTTP/3, the 100–159 TLS switch, and the C client install name remain open.
+- `docs/macos.md` and `docs/macos.zh-CN.md` record the 0.2.1 comparison. The C client install name is `@rpath`. `Context(tls=)` reaches the xpcshell environment and is not read there. HTTP/3 stays version 20 with the socket process off.
 - macOS arm64 source build of the shell. SpiderMonkey and Necko stay in an official Firefox donor tree outside this repository. Maintainer steps and the verified HTTP/1.1 and HTTP/2 path are in `docs/macos.md` and `docs/macos.zh-CN.md`.
 - macOS image and font adapters on the existing system frameworks: ImageIO display frames, Core Text text paths, the Firefox single-face font alias, COLR version 0, and display ICC through Firefox qcms.
 - A local macOS wheel lays the shell out at `_runtime/dist/js` and copies the donor xpcshell closure to `_runtime/dist/necko`. `requests`, `brotli`, and `zstandard` are package dependencies. `runtime.json` stores the archive size and sha256 and leaves the macOS URL empty.
@@ -16,6 +16,58 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 
 - On Darwin, `tools/build.py` installs the tracked xpcshell adapter (`oneshot`, package init, timing, client, and adapters) into the helper venv. Windows still receives `oneshot.py` only. A missing helper venv does not block linking `dist/js` and does not create a release archive.
+- Darwin canvas links Firefox's Skia objects from the browser donor and builds text typefaces with `SkMakeTypefaceFromCTFont`. The `--timing-v3` trailer now carries eight values. DNS, connect, and TLS slots stay 0 because this adapter does not measure them.
+
+## [0.2.1] - 2026-10-30
+
+### Fixed
+
+- Timer precision is Firefox 159's: `performance.now()`, `timeOrigin`,
+  `Date.now()`, `Event.timeStamp` and every navigation / resource time are
+  clamped to 1 ms with Firefox's jittered rounding (`nsRFPService`), one seed
+  per document. `Event.timeStamp` is on the document's performance timeline.
+- Navigation and resource timing report the measured DNS, connect and TLS
+  phases from Necko (a reused connection reads `fetchStart`, as in Firefox);
+  a browser-initiated load's `fetchStart` precedes `navigationStart`.
+  `deliveryType` is in Firefox's member order; unreached milestones read 0.
+- Necko resolves IP literals without a lookup and caches names
+  (`network.dnsCacheExpiration` 60 s, 1600 entries).
+- Layout: CSS margin collapsing, 17 px classic scrollbars on the viewport and
+  scroll containers, root `clientWidth/Height` and `scrollWidth/Height` from
+  the scrollport, `scrollTopMax` / `scrollLeftMax`, `clientTop` /
+  `clientLeft`, `window.scrollMaxX/Y`.
+- Fonts: SimSun line height (bad-underline metrics), the Arial default when no
+  listed family is installed, Firefox's per-script system fallback list.
+- SVG text `getBBox`: font box versus frame descent, and no glyph ink below
+  20 px (`text-rendering: auto`).
+- Example result files no longer ship in the wheel.
+
+## [0.2.0] - 2026-10-29
+
+### Added
+
+- Canvas 2D draws through Firefox 159's own Skia (`gfx/skia`), set up like
+  Firefox's `DrawTargetSkia`: fills, strokes, paths, `clip`, gradients,
+  patterns, `roundRect`, `drawImage`, shadows and `fillText` / `strokeText`.
+- `Context(tls="100".."159")` selects the Firefox release whose TLS
+  ClientHello, HTTP/2 settings and HTTP/3 priorities Necko sends.
+- `DOMMatrix` / `DOMMatrixReadOnly`: every operation, `fromMatrix`,
+  `fromFloat32/64Array`, CSS transform strings, `transformPoint`, `toString`.
+
+### Fixed
+
+- `Origin` and the body `Content-Type` on fetch / XHR / `sendBeacon`;
+  `Sec-Fetch-Site` across redirects; `window.originAgentCluster`.
+- `window.event` during microtasks queued by an event listener.
+- Font fallback by language group, element `lang`, SVG presentation
+  attributes and SVG text `getBBox`; `ctx.font` read-back.
+- `python -m ruyijs.examples` lists the examples that ship; DataDome output on
+  a Chinese Windows console; the Akamai example keeps its User-Agent and TLS
+  version together (`--tls`).
+
+### Changed
+
+- The bundled runtime is rebuilt on Firefox 159 (SpiderMonkey, Necko, Skia).
 
 ## [0.1.9] - 2026-10-29
 

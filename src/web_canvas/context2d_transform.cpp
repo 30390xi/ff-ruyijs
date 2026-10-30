@@ -23,14 +23,34 @@ const MethodSpec kMethods[] = {
     {"getTransform", kGetTransform, 0},
 };
 
-// out = current * next, with each factor in the canvas [a b c d e f] order.
-void Multiply(const double current[6], const double next[6], double out[6]) {
-  out[0] = current[0] * next[0] + current[2] * next[1];
-  out[1] = current[1] * next[0] + current[3] * next[1];
-  out[2] = current[0] * next[2] + current[2] * next[3];
-  out[3] = current[1] * next[2] + current[3] * next[3];
-  out[4] = current[0] * next[4] + current[2] * next[5] + current[4];
-  out[5] = current[1] * next[4] + current[3] * next[5] + current[5];
+// gfx::Matrix is float: every canvas transform is rounded to float and
+// composed in float, so getTransform() and the drawing see Firefox's values.
+// Matrix order: [a b c d e f] = [_11 _12 _21 _22 _31 _32].
+struct Matrix {
+  float m[6];
+  bool Finite() const {
+    for (float value : m) if (!std::isfinite(value)) return false;
+    return true;
+  }
+};
+// BaseMatrix::operator*: lhs applied first.
+Matrix Multiply(const Matrix& lhs, const Matrix& rhs) {
+  const float* a = lhs.m;
+  const float* b = rhs.m;
+  return Matrix{{a[0] * b[0] + a[1] * b[2], a[0] * b[1] + a[1] * b[3],
+                 a[2] * b[0] + a[3] * b[2], a[2] * b[1] + a[3] * b[3],
+                 a[4] * b[0] + a[5] * b[2] + b[4], a[4] * b[1] + a[5] * b[3] + b[5]}};
+}
+Matrix FromDoubles(const double values[6]) {
+  return Matrix{{float(values[0]), float(values[1]), float(values[2]), float(values[3]),
+                 float(values[4]), float(values[5])}};
+}
+// SetTransformInternal: a non-finite result leaves the transform unchanged.
+bool Commit(JSContext* cx, JS::HandleObject self, const Matrix& matrix) {
+  if (!matrix.Finite()) return true;
+  double values[6];
+  for (int i = 0; i < 6; ++i) values[i] = matrix.m[i];
+  return detail::SetMatrix(cx, self, values);
 }
 }  // namespace
 
@@ -82,32 +102,37 @@ bool Context2DTransformMethod(JSContext* cx, unsigned argc, JS::Value* vp) {
     double pair[2];
     bool usable = false;
     if (!detail::ReadNumbers(cx, args, 0, 2, pair, &usable) || !usable) return !usable;
+    Matrix matrix = FromDoubles(current);
+    const float x = float(pair[0]), y = float(pair[1]);
     if (spec.kind == kTranslate) {
-      next[4] = pair[0];
-      next[5] = pair[1];
+      // BaseMatrix::PreTranslate.
+      matrix.m[4] += matrix.m[0] * x + matrix.m[2] * y;
+      matrix.m[5] += matrix.m[1] * x + matrix.m[3] * y;
     } else {
-      next[0] = pair[0];
-      next[3] = pair[1];
+      // BaseMatrix::PreScale.
+      matrix.m[0] *= x;
+      matrix.m[1] *= x;
+      matrix.m[2] *= y;
+      matrix.m[3] *= y;
     }
+    return Commit(cx, self, matrix);
   } else if (spec.kind == kRotate) {
     double angle = 0.0;
     bool usable = false;
     if (!detail::ReadNumbers(cx, args, 0, 1, &angle, &usable) || !usable) return !usable;
-    next[0] = std::cos(angle);
-    next[1] = std::sin(angle);
-    next[2] = -std::sin(angle);
-    next[3] = std::cos(angle);
+    // Matrix::Rotation(Float): sinf/cosf of the float angle, then
+    // Rotation * current.
+    const float radians = float(angle);
+    const float sine = sinf(radians), cosine = cosf(radians);
+    return Commit(cx, self, Multiply(Matrix{{cosine, sine, -sine, cosine, 0, 0}},
+                                     FromDoubles(current)));
   } else {
     bool usable = false;
     if (!detail::ReadNumbers(cx, args, 0, 6, next, &usable) || !usable) return !usable;
   }
-  double composed[6];
-  if (spec.kind == kSetTransform) {
-    for (int i = 0; i < 6; ++i) composed[i] = next[i];
-  } else {
-    Multiply(current, next, composed);
-  }
-  return detail::SetMatrix(cx, self, composed);
+  // transform(): Matrix(args) * current; setTransform(): Matrix(args).
+  if (spec.kind == kSetTransform) return Commit(cx, self, FromDoubles(next));
+  return Commit(cx, self, Multiply(FromDoubles(next), FromDoubles(current)));
 }
 
 bool InstallContext2DTransform(State& state, WebFace& face) {

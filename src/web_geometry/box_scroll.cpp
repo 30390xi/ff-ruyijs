@@ -9,14 +9,6 @@
 namespace ruyijs::web_geometry {
 namespace {
 constexpr size_t kMaxScrolledElements = 65536;
-bool ScrollContainer(const box::BoxNode& node) {
-  if (node.text) return false;
-  for (const char* name : {"overflow-x", "overflow-y"}) {
-    const auto value = node.style.Get(name);
-    if (value == "hidden" || value == "scroll" || value == "auto") return true;
-  }
-  return false;
-}
 std::pair<uint64_t, uint64_t> Key(const document_model::NodeKey& key) { return {key.document, key.node}; }
 }  // namespace
 
@@ -40,7 +32,7 @@ bool Realm::ElementScroll(JS::HandleObject element, bool write, double* x, doubl
   *changed = false;
   std::shared_ptr<const LayoutCache> layout; size_t found = size_t(-1); box::BoxViewport viewport;
   if (!LayoutFor(*state_, element, &layout, &found, &viewport)) return false;
-  if (!layout || found == size_t(-1) || !layout->layout[found].present || !ScrollContainer(layout->nodes[found])) {
+  if (!layout || found == size_t(-1) || !layout->layout[found].present || !box::BoxScrollContainer(layout->nodes, found)) {
     if (!write) *x = *y = 0;
     return true;
   }

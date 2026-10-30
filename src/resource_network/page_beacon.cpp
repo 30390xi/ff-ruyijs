@@ -2,6 +2,7 @@
 #include "resource_network/async_http.h"
 #include "web_platform/request_body.h"
 #include "domain/browser_environment/url_value.h"
+#include "domain/resource_network/cors.h"
 #include "jsapi.h"
 #include "js/Object.h"
 #include "jsfriendapi.h"
@@ -37,6 +38,10 @@ bool Deliver(JSContext* cx, unsigned argc, JS::Value* vp) {
   JS::SetReservedSlot(packet, 0, JS::UndefinedValue());
   HttpOptions options;options.initiator="beacon";
   options.source=request->source;options.site=request->site;
+  // Beacon "sendBeacon" step 6: a Content-Type that is not CORS-safelisted makes the request cors.
+  for (const auto& field : request->headers)
+    if (ruyijs::domain::resource_network::lower_header_name(field.first) == "content-type")
+      options.cors = !ruyijs::domain::resource_network::cors_safelisted_request_header(field.first, field.second);
   // The page observes admission, not a response: the request runs on the
   // asynchronous transport and the JS thread does not wait for it. The pending
   // budget is released when the response (or failure) arrives.

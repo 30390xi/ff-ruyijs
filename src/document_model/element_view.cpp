@@ -6,14 +6,16 @@
 #include "js/Wrapper.h"
 #include "document_model/layout_source.h"
 #include "browser_environment/environment.h"
+#include <algorithm>
 #include <cmath>
 
 namespace ruyijs::document_model {
 namespace {
 enum Field { ClientHeight, ClientLeft, ClientTop, ClientWidth, ScrollHeight, ScrollWidth,
-             ScrollLeft, ScrollTop, Zoom };
+             ScrollLeft, ScrollTop, Zoom, ScrollTopMax, ScrollLeftMax };
 constexpr const char* fields[] = {"clientHeight", "clientLeft", "clientTop", "clientWidth",
-  "scrollHeight", "scrollWidth", "scrollLeft", "scrollTop", "currentCSSZoom"};
+  "scrollHeight", "scrollWidth", "scrollLeft", "scrollTop", "currentCSSZoom",
+  "scrollTopMax", "scrollLeftMax"};
 constexpr const char* methods[] = {"scroll", "scrollBy", "scrollTo", "scrollIntoView", "checkVisibility"};
 Wrapper* Receiver(JSContext* cx, JS::HandleObject object) {
   if (object && JS::GetClass(object) == &kNodeClass) {
@@ -89,6 +91,35 @@ bool Read(JSContext* cx, unsigned argc, JS::Value* vp) {
     return true;
   }
   int32_t value = field == Zoom ? 1 : 0;
+  if (field == ScrollTopMax || field == ScrollLeftMax || field == ClientLeft || field == ClientTop) {
+    // scrollTopMax/scrollLeftMax: the scroll range (scrollHeight - clientHeight)
+    // of a scroll container or the viewport's scrolling element, else 0;
+    // clientTop/clientLeft: the top/left border widths.
+    State& owner = *entry->owner;
+    OffsetGeometry geometry;
+    if (owner.offsetGeometry) {
+      JS::RootedObject element(cx, &args.thisv().toObject());
+      if (!owner.offsetGeometry(owner.offsetGeometryContext, element, &geometry)) return false;
+    }
+    double result = 0;
+    if (field == ClientLeft || field == ClientTop) {
+      result = std::round(field == ClientLeft ? geometry.client_left : geometry.client_top);
+    } else if (geometry.present) {
+      bool viewport = false;
+      {
+        JSAutoRealm realm(cx, owner.page);
+        if (!ScrollsViewport(owner, entry->key, &viewport)) return false;
+      }
+      // The viewport's scrolling element reads the root's scroll frame; any
+      // other element has a range only when it is a scroll container.
+      if (viewport || (geometry.scroller && !geometry.root))
+        result = field == ScrollTopMax
+            ? std::max(0.0, std::round(geometry.scroll_height) - std::round(geometry.client_height))
+            : std::max(0.0, std::round(geometry.scroll_width) - std::round(geometry.client_width));
+    }
+    args.rval().setNumber(result);
+    return true;
+  }
   if (field == ScrollWidth || field == ScrollHeight) {
     // A rendered element other than the scrolling element reports its
     // layout's scrollable overflow; the scrolling element (viewport) keeps the
@@ -100,11 +131,13 @@ bool Read(JSContext* cx, unsigned argc, JS::Value* vp) {
       if (!ScrollsViewport(owner, entry->key, &viewport)) return false;
     }
     OffsetGeometry geometry;
-    if (!viewport && owner.offsetGeometry) {
+    if (owner.offsetGeometry) {
       JS::RootedObject element(cx, &args.thisv().toObject());
       if (!owner.offsetGeometry(owner.offsetGeometryContext, element, &geometry)) return false;
     }
-    if (geometry.present && !geometry.root) {
+    // The scrolling element reports the viewport scroll frame (the root's
+    // geometry carries it); another element its own scrollable overflow.
+    if (geometry.present && viewport == geometry.root) {
       const double size = field == ScrollWidth ? geometry.scroll_width : geometry.scroll_height;
       args.rval().setInt32(int32_t(std::round(size)));
       return true;
@@ -117,14 +150,10 @@ bool Read(JSContext* cx, unsigned argc, JS::Value* vp) {
     OffsetGeometry geometry;
     JS::RootedObject element(cx, &args.thisv().toObject());
     if (!owner.offsetGeometry(owner.offsetGeometryContext, element, &geometry)) return false;
-    double size = field == ClientWidth ? geometry.client_width : geometry.client_height;
-    if (geometry.present && geometry.root) {
-      double width = 0, height = 0, x = 0, y = 0;
-      JSAutoRealm realm(cx, owner.page);
-      if (!owner.environment.ReadLayoutViewport(&width, &height, &x, &y)) return false;
-      size = field == ClientWidth ? width : height;
-    }
-    args.rval().setInt32(int32_t(std::trunc(size)));
+    // The root's client size is the viewport scrollport (less scrollbars);
+    // Element::ClientWidth rounds the app-unit size to whole CSS pixels.
+    const double size = field == ClientWidth ? geometry.client_width : geometry.client_height;
+    args.rval().setInt32(int32_t(std::round(size)));
     return true;
   }
   if (field == ClientWidth || field == ClientHeight || field == ScrollWidth || field == ScrollHeight) {
@@ -225,7 +254,7 @@ void Realm::ElementScrollDelivered(JS::HandleObject element) {
   if (entry && entry->owner) entry->owner->scrollPending.erase(entry->key);
 }
 bool InstallElementView(State& state) {
-  for (int field = ClientHeight; field <= Zoom; ++field)
+  for (int field = ClientHeight; field <= ScrollLeftMax; ++field)
     if (!state.Accessor("Element", fields[field], Read, field,
         field == ScrollLeft || field == ScrollTop ? Write : nullptr)) return false;
   for (int method = 0; method < int(std::size(methods)); ++method)

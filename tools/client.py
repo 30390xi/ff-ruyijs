@@ -54,6 +54,8 @@ def build_client(native, destination):
         if not current:
             native.run([native.compiler()[0], *native._c_sdk_flags(), "-stdlib=libc++",
                         "-fvisibility=hidden", "-dynamiclib",
+                        "-Wl,-install_name,@rpath/libruyijs_client.dylib",
+                        "-Wl,-rpath,@executable_path",
                         "-o", str(output), *[str(path) for path in objects]],
                        "link-client")
         include = destination / "include"

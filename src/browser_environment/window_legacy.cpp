@@ -77,10 +77,9 @@ bool ScrollBy(WindowLegacyState& w, const JS::CallArgs& args, int member) {
   return w.env.postTask(w.env.postTaskContext, object);
 }
 bool ScrollMax(WindowLegacyState& w, bool vertical, JS::MutableHandleValue out) {
-  double width = 0, height = 0, right = 0, bottom = 0;
-  if (!w.env.ReadViewport(&width, &height)) return false;
+  double right = 0, bottom = 0;
   if (w.env.scrollExtent && !w.env.scrollExtent(w.env.scrollExtentContext, &right, &bottom)) return false;
-  const double extent = vertical ? bottom + w.env.scrollY - height : right + w.env.scrollX - width;
+  const double extent = vertical ? bottom : right;
   out.setInt32(int32_t(std::max(0.0, std::round(std::isfinite(extent) ? extent : 0))));
   return true;
 }
@@ -131,7 +130,8 @@ bool LegacyGetter(JSContext* cx, unsigned argc, JS::Value* vp) {
       return JS_WrapValue(cx, args.rval());
     case mScrollMaxX: return ScrollMax(w, false, args.rval());
     case mScrollMaxY: return ScrollMax(w, true, args.rval());
-    case mFullScreen: case mOriginAgentCluster: args.rval().setBoolean(false); return true;
+    case mFullScreen: args.rval().setBoolean(false); return true;
+    case mOriginAgentCluster: args.rval().setBoolean(w.env.originKeyed); return true;
     case mInstallTrigger: args.rval().setNull(); return true;
     default:
       args.rval().setObject(*w.pipInstance);

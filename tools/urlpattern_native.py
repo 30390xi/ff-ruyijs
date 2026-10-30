@@ -97,6 +97,10 @@ def build(native):
     env['RUSTC'] = rustc
     env['CARGO_HOME'] = str(directory / 'cargo-home')
     target_dir = directory / 'target'
+    # Every rlib in deps is archived, so rlibs left by an earlier rustc or
+    # donor would be linked beside the new ones; start from an empty target.
+    if target_dir.exists():
+        shutil.rmtree(target_dir)
     command = [cargo, 'build', '--release', '--offline', '--locked', '--target', target_triple(native),
                '--manifest-path', str(source / 'Cargo.toml'), '--target-dir', str(target_dir),
                '--config', "source.crates-io.replace-with='donor'",

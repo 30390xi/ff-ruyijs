@@ -87,6 +87,10 @@ def serve(adapter, method, url, headers, body):
     for name, value in headers:
         fields[name] = fields[name] + ", " + value if name in fields else value
     prepared = Request(method, url, headers=fields, data=body or None).prepare()
+    # The page side frames the body exactly as Firefox does; requests' own
+    # "Content-Length: 0" for a bodiless non-GET (a CORS preflight) is not sent.
+    if "Content-Length" not in fields and not body:
+        prepared.headers.pop("Content-Length", None)
     control = RequestControl(BUDGET, max_attempts=ATTEMPTS)
     reader = open_response(adapter, prepared, control,
                            timeout=(BUDGET, READ), verify=True, proxies=transport_proxies())
@@ -112,11 +116,16 @@ def serve(adapter, method, url, headers, body):
     sys.stdout.buffer.write(payload)
     # A versioned observation trailer accompanies the existing response.
     # Counts come from the one strict decoder, including compressed bodies.
-    measured = '--timing-v2' in sys.argv
-    sys.stdout.buffer.write(struct.pack('<IQQ', 0x32545252 if measured else 0x31545252,
+    measured = '--timing-v2' in sys.argv or '--timing-v3' in sys.argv
+    establish = '--timing-v3' in sys.argv
+    version = 0x33545252 if establish else 0x32545252 if measured else 0x31545252
+    sys.stdout.buffer.write(struct.pack('<IQQ', version,
                                        reader.decoder.encoded, reader.decoder.decoded))
     write_text({10: 'http/1.0', 11: 'http/1.1', 20: 'h2', 30: 'h3'}.get(reader.version, ''))
-    if measured:
+    if establish:
+        from ruyijs_necko.timing import FIELDS
+        sys.stdout.buffer.write(struct.pack('<dddddddd', *snapshot(control, FIELDS)))
+    elif measured:
         sys.stdout.buffer.write(struct.pack('<ddd', *snapshot(control)))
     sys.stdout.buffer.flush()
 

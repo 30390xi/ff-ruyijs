@@ -1,6 +1,8 @@
 #include "web_geometry/matrix.h"
+#include "js/Conversions.h"
 #include "js/experimental/TypedData.h"
-#include <cstdio>
+#include <cmath>
+#include <string>
 
 namespace ruyijs::web_geometry {
 bool MatrixExport(State& s, JS::HandleObject object, MatrixOperation op, JS::MutableHandleValue result) {
@@ -24,18 +26,22 @@ bool MatrixExport(State& s, JS::HandleObject object, MatrixOperation op, JS::Mut
     result.setObject(*array);
     return true;
   }
-  // Preserve the previously validated Canvas matrix %g representation, now
-  // with bounded space for all sixteen 3D components as observed publicly.
-  char buffer[512];
-  int length = std::snprintf(buffer, sizeof(buffer), "%s(", is2D ? "matrix" : "matrix3d");
+  // DOMMatrixReadOnly::Stringify: JS::NumberToString of each member; a
+  // non-finite member is an InvalidStateError.
+  std::string out = is2D ? "matrix(" : "matrix3d(";
   for (unsigned i = 0; i < (is2D ? 6u : 16u); ++i) {
-    double number = values[is2D ? domain::geometry::kAliases[i] : i];
-    int written = std::snprintf(buffer + length, sizeof(buffer) - length, "%s%g", i ? ", " : "", number);
-    if (written < 0 || size_t(written) >= sizeof(buffer) - length) return WebKit::Fail(s.cx, "DOMMatrix string exceeds its output bound");
-    length += written;
+    const double number = values[is2D ? domain::geometry::kAliases[i] : i];
+    if (!std::isfinite(number))
+      return MatrixDOMException(s, "InvalidStateError",
+                                "DOMMatrixReadOnly.toString: Matrix with a non-finite element "
+                                "cannot be stringified.");
+    char buffer[JS::MaximumNumberToStringLength];
+    JS::NumberToString(number, buffer);
+    if (i) out += ", ";
+    out += buffer;
   }
-  buffer[length++] = ')';
-  JS::RootedString text(s.cx, JS_NewStringCopyN(s.cx, buffer, length));
+  out += ')';
+  JS::RootedString text(s.cx, JS_NewStringCopyN(s.cx, out.data(), out.size()));
   if (!text) return false;
   result.setString(text);
   return true;

@@ -3,7 +3,6 @@
 #include "web_geometry/font_config.h"
 #include <cstdlib>
 #include <string>
-#include <cmath>
 
 namespace ruyijs::web_geometry {
 bool BoxText(State& s, const document_model::LayoutNodeSource& source, box::BoxNode* node) {
@@ -25,8 +24,12 @@ bool BoxText(State& s, const document_model::LayoutNodeSource& source, box::BoxN
   font.italic=node->style.Get("font-style")!="normal";
   const auto weight=node->style.Get("font-weight");
   if(!weight.empty()) font.weight=unsigned(std::strtoul(weight.c_str(),nullptr,10));
+  // The inherited content language (nsStyleFont::mLanguage) picks the
+  // generic families' language group and the fallback order.
+  font.language=node->style.Get("-x-lang");
+  if(font.language=="-x-none") font.language.clear();
   // System fonts do not change while the font configuration generation holds.
-  std::string key=std::to_string(FontConfigGeneration())+'\x1f'+font.family+'\x1f'+std::to_string(font.size)+
+  std::string key=std::to_string(FontConfigGeneration())+'\x1f'+font.family+'\x1f'+font.language+'\x1f'+std::to_string(font.size)+
       '\x1f'+std::to_string(font.weight)+(font.italic?"i":"n");
   key.append(reinterpret_cast<const char*>(text.data()),text.size()*sizeof(char16_t));
   auto hit=s.textMeasures.find(key);

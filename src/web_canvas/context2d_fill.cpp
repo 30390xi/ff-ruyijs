@@ -3,7 +3,6 @@
 // a second owner.
 #include "web_canvas/internal.h"
 #include "web_canvas/path_geometry.h"
-#include <cmath>
 
 namespace ruyijs::web_canvas {
 namespace {
@@ -47,7 +46,9 @@ bool FillMethod(JSContext* cx,unsigned argc,JS::Value* vp) {
       std::u16string units;
       if (!detail::StringUnits(cx, text, &units)) return false;
       const double maxWidth = argc > 3 ? values[2] : NAN;
-      if (!FillCanvasText(state, self, units, values[0], values[1], maxWidth)) return false;
+      bool handled = false;
+      if (!FillRecordedText(state, self, units, values[0], values[1], maxWidth, &handled)) return false;
+      if (!handled && !FillCanvasText(state, self, units, values[0], values[1], maxWidth)) return false;
     }
   }
   args.rval().setUndefined();

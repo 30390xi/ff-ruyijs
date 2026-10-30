@@ -1,4 +1,9 @@
 #include "web_geometry/font_backend.h"
+#ifdef _WIN32
+#include <dwrite_3.h>
+#else
+#include <CoreText/CoreText.h>
+#endif
 #include <algorithm>
 #include <cmath>
 
@@ -29,6 +34,82 @@ bool Continuation(uint32_t code) {
       hb_unicode_combining_class(hb_unicode_funcs_get_default(), code) != 0;
 }
 }
+namespace {
+// font.blacklist.underline_offset (modules/libpref/init/all.js).
+bool BadUnderlineFamily(IDWriteFontFace* face) {
+#ifndef _WIN32
+  if (!face || !face->CoreFont()) return false;
+  CTFontRef font = static_cast<CTFontRef>(face->CoreFont());
+  CFStringRef name = CTFontCopyFamilyName(font);
+  if (!name) return false;
+  static const CFStringRef kFamilies[] = {
+      CFSTR("FangSong"), CFSTR("Gulim"), CFSTR("GulimChe"), CFSTR("MingLiU"),
+      CFSTR("MingLiU-ExtB"), CFSTR("MingLiU_HKSCS"), CFSTR("MingLiU-HKSCS-ExtB"),
+      CFSTR("MS Gothic"), CFSTR("MS Mincho"), CFSTR("MS PGothic"), CFSTR("MS PMincho"),
+      CFSTR("MS UI Gothic"), CFSTR("PMingLiU"), CFSTR("PMingLiU-ExtB"), CFSTR("SimHei"),
+      CFSTR("SimSun"), CFSTR("SimSun-ExtB"), CFSTR("Hei"), CFSTR("Kai"),
+      CFSTR("Apple LiGothic"), CFSTR("Apple LiSung"), CFSTR("Osaka")};
+  bool bad = false;
+  for (CFStringRef item : kFamilies) {
+    if (CFStringCompare(name, item, kCFCompareCaseInsensitive) == kCFCompareEqualTo) {
+      bad = true;
+      break;
+    }
+  }
+  CFRelease(name);
+  return bad;
+#else
+  if (!face) return false;
+  static const wchar_t* kFamilies[] = {
+      L"FangSong", L"Gulim", L"GulimChe", L"MingLiU", L"MingLiU-ExtB", L"MingLiU_HKSCS",
+      L"MingLiU-HKSCS-ExtB", L"MS Gothic", L"MS Mincho", L"MS PGothic", L"MS PMincho",
+      L"MS UI Gothic", L"PMingLiU", L"PMingLiU-ExtB", L"SimHei", L"SimSun", L"SimSun-ExtB",
+      L"Hei", L"Kai", L"Apple LiGothic", L"Apple LiSung", L"Osaka"};
+  ComPtr<IDWriteFontFace3> face3;
+  if (FAILED(face->QueryInterface(IID_PPV_ARGS(&face3)))) return false;
+  ComPtr<IDWriteLocalizedStrings> names;
+  if (FAILED(face3->GetFamilyNames(&names))) return false;
+  for (UINT32 i = 0; i < names->GetCount(); ++i) {
+    UINT32 length = 0;
+    if (FAILED(names->GetStringLength(i, &length))) continue;
+    std::wstring name(length + 1, L'\0');
+    if (FAILED(names->GetString(i, name.data(), length + 1))) continue;
+    name.resize(length);
+    for (const wchar_t* bad : kFamilies)
+      if (_wcsicmp(name.c_str(), bad) == 0) return true;
+  }
+  return false;
+#endif
+}
+}  // namespace
+
+double FrameMaxDescent(const DWRITE_FONT_METRICS& metrics, double conv, double maxAscent,
+                       double maxDescent, IDWriteFontFace* face, double size) {
+  double underlineSize = std::max(1.0, metrics.underlineThickness * conv);
+  double underlineOffset = std::min(metrics.underlinePosition * conv, -1.0);
+  if (maxAscent < 1.0) {
+    underlineSize = 0;
+    underlineOffset = 0;
+  } else if (size > 0 && BadUnderlineFamily(face)) {
+    // gfxFont::SanitizeMetrics for a bad-underline CJK family (not a system font).
+    const double maxHeight = maxAscent + maxDescent;
+    const double emAscent = maxHeight > 0 ? size * maxAscent / maxHeight : 0;
+    const double emDescent = size - emAscent;
+    const double internalLeading = std::max(maxHeight - size, 0.0);
+    const double externalLeading = std::ceil(metrics.lineGap * conv);
+    underlineOffset = std::min(underlineOffset, -2.0);
+    if (internalLeading + externalLeading > underlineSize)
+      underlineOffset = std::min(underlineOffset, -emDescent);
+    else
+      underlineOffset = std::min(underlineOffset, underlineSize - emDescent);
+  } else if (underlineSize - underlineOffset > maxDescent) {
+    if (underlineSize > maxDescent) underlineSize = std::max(maxDescent, 1.0);
+    underlineOffset = underlineSize - maxDescent;
+  }
+  const double offset = std::floor(-underlineOffset + 0.5);
+  const double minDescent = offset + std::floor(underlineSize + 0.5);
+  return std::floor(std::max(minDescent, maxDescent) + 0.5);
+}
 bool SystemFonts::LineMetrics(const FontInput& input, double* content, double* normal) {
   *content = *normal = 0;
   if (!std::isfinite(input.size) || input.size <= 0) return true;
@@ -43,13 +124,18 @@ bool SystemFonts::LineMetrics(const FontInput& input, double* content, double* n
   if (!metrics.designUnitsPerEm) return false;
   const double size = float(std::round(input.size * 60) / 60);
   const float factor = float(size / metrics.designUnitsPerEm);
-  const double height = std::round(metrics.ascent * factor) + std::round(metrics.descent * factor);
+  const double maxAscent = std::round(metrics.ascent * factor);
+  const double maxDescent = std::round(metrics.descent * factor);
+  const double height = maxAscent + maxDescent;
   // nsFontMetrics rounds each metric to whole pixels; GetNormalLineHeight uses
   // 1.2em only when the font has neither internal nor external leading.
   const double em = std::floor(size + .5);
   const double internal = std::floor(std::max(height - size, 0.0) + .5);
   const double external = std::floor(std::ceil(metrics.lineGap * factor) + .5);
-  *content = height;
+  // An inline box is MaxAscent + MaxDescent (nsLineLayout / nsTextFrame),
+  // the descent widened to hold the underline.
+  *content = maxAscent + FrameMaxDescent(metrics, double(factor), maxAscent, maxDescent,
+                                         font.face.Get(), size);
   *normal = internal == 0 && external == 0 ? std::floor(float(em * 60) * 1.2f + .5f) / 60
                                            : em + internal + external;
   return true;

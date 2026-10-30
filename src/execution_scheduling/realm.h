@@ -116,6 +116,12 @@ class Realm final {
   // Milliseconds since `page`'s time origin, unrounded and constant within a task;
   // NaN when the page has no Performance owner (Web Animations timelines).
   double DocumentNow(JS::HandleObject page);
+  // A Scheduling clock time (`clockMs` < 0: now, synced) relative to `page`'s
+  // time origin, unclamped; NaN without a Performance owner.
+  double OriginRelative(JS::HandleObject page, double clockMs);
+  // A time-origin relative time as `page`'s content reads it (Firefox's
+  // jittered 1 ms clamp with the document's seed); unchanged without an owner.
+  double ReduceRelative(JS::HandleObject page, double ms);
   // Whether this page already has a navigation record.
   bool HasNavigation(JS::HandleObject page);
   bool ValidateAdvance(double ms, double step, uint32_t maxTasks);

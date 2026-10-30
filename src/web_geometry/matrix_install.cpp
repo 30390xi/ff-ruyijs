@@ -19,30 +19,31 @@ bool InstallMatrix(State& s) {
     const char* name = kind ? "DOMMatrix" : "DOMMatrixReadOnly";
     for (unsigned i = 0; i < (kind ? 22u : 24u); ++i)
       if (!s.kit.Accessor(face, name, kMatrixFields[i], MatrixGet, kind ? MatrixSet : nullptr, kind * 32 + i)) return false;
+    // MatrixFrom slot: factory * 2 + (DOMMatrix ? 1 : 0).
     const char* factories[] = {"fromMatrix", "fromFloat32Array", "fromFloat64Array"};
     for (unsigned i = 0; i < 3; ++i) {
-      JS::RootedObject fn(s.cx, s.kit.Function(MatrixFrom, factories[i], i ? 1 : 0, kind));
+      JS::RootedObject fn(s.cx, s.kit.Function(MatrixFrom, factories[i], i ? 1 : 0, int32_t(i * 2 + kind)));
       if (!fn || !JS_DefineProperty(s.cx, face.constructor, factories[i], fn, JSPROP_ENUMERATE) ||
           !s.kit.helpers->Member(fn, name, factories[i], "call")) return false;
     }
   }
   struct Method { const char* name; MatrixOperation op; bool mutableOnly; unsigned length; };
   const Method methods[] = {
-    {"flipX", NewIdentity, false, 0}, {"flipY", NewIdentity, false, 0},
-    {"inverse", NewIdentity, false, 0}, {"multiply", NewIdentity, false, 0},
-    {"rotate", NewIdentity, false, 0}, {"rotateAxisAngle", NewIdentity, false, 0},
-    {"rotateFromVector", NewIdentity, false, 0}, {"scale", NewIdentity, false, 0},
-    {"scale3d", NewIdentity, false, 0}, {"scaleNonUniform", NewIdentity, false, 0},
-    {"skewX", NewIdentity, false, 0}, {"skewY", NewIdentity, false, 0},
-    {"translate", NewIdentity, false, 0}, {"toFloat32Array", MatrixFloat32, false, 0},
+    {"flipX", OpFlipX, false, 0}, {"flipY", OpFlipY, false, 0},
+    {"inverse", OpInverse, false, 0}, {"multiply", OpMultiply, false, 0},
+    {"rotate", OpRotate, false, 0}, {"rotateAxisAngle", OpRotateAxisAngle, false, 0},
+    {"rotateFromVector", OpRotateFromVector, false, 0}, {"scale", OpScale, false, 0},
+    {"scale3d", OpScale3d, false, 0}, {"scaleNonUniform", OpScaleNonUniform, false, 0},
+    {"skewX", OpSkewX, false, 0}, {"skewY", OpSkewY, false, 0},
+    {"translate", OpTranslate, false, 0}, {"toFloat32Array", MatrixFloat32, false, 0},
     {"toFloat64Array", MatrixFloat64, false, 0}, {"toJSON", MatrixJSON, false, 0},
     {"toString", MatrixString, false, 0}, {"transformPoint", MatrixPoint, false, 0},
-    {"multiplySelf", SameMatrix, true, 0}, {"preMultiplySelf", SameMatrix, true, 0},
-    {"rotateSelf", SameMatrix, true, 0}, {"rotateAxisAngleSelf", SameMatrix, true, 0},
-    {"rotateFromVectorSelf", SameMatrix, true, 0}, {"scaleSelf", SameMatrix, true, 0},
-    {"scale3dSelf", SameMatrix, true, 0}, {"skewXSelf", SameMatrix, true, 0},
-    {"skewYSelf", SameMatrix, true, 0}, {"invertSelf", SameMatrix, true, 0},
-    {"translateSelf", TranslateMatrix, true, 0}, {"setMatrixValue", SetMatrixString, true, 1}
+    {"multiplySelf", OpMultiplySelf, true, 0}, {"preMultiplySelf", OpPreMultiplySelf, true, 0},
+    {"rotateSelf", OpRotateSelf, true, 0}, {"rotateAxisAngleSelf", OpRotateAxisAngleSelf, true, 0},
+    {"rotateFromVectorSelf", OpRotateFromVectorSelf, true, 0}, {"scaleSelf", OpScaleSelf, true, 0},
+    {"scale3dSelf", OpScale3dSelf, true, 0}, {"skewXSelf", OpSkewXSelf, true, 0},
+    {"skewYSelf", OpSkewYSelf, true, 0}, {"invertSelf", OpInvertSelf, true, 0},
+    {"translateSelf", OpTranslateSelf, true, 0}, {"setMatrixValue", SetMatrixString, true, 1}
   };
   for (const auto& method : methods)
     if ((!s.worker || (std::strcmp(method.name, "toString") && std::strcmp(method.name, "setMatrixValue"))) && !s.kit.Method(method.mutableOnly ? s.matrix : s.matrixReadOnly,

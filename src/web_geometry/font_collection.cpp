@@ -268,19 +268,24 @@ bool FontCollection::Select(const FontInput& input, uint32_t codepoint, Selected
     config_generation = generation;
     selected.clear(); families.clear(); fallbacks.clear();
   }
-  const std::string familyKey = input.family + ' ' + input.language;
+  const std::string familyKey = input.family + '' + input.language;
   auto memo = families.find(familyKey);
   if (memo == families.end()) {
     if (families.size() >= 256) families.clear();
     memo = families.emplace(familyKey, FontFamilies(input)).first;
   }
-  const auto& names = memo->second;
+  // The family loop over one list (gfxFontGroup's font list or a
+  // pref-lang fallback list): the first visible family whose face for this
+  // weight/style has the character.
+  bool aborted = false;
+  bool resolved = false;  // some family of the list exists (gfxFontGroup::mFonts non-empty)
+  const auto tryNames = [&](const std::vector<std::wstring>& names) -> bool {
   for (const auto& name : names) {
     if (!FontFamilyVisible(name)) continue;
     bool cached = false;
     for (const auto& font : selected) {
       if (font.family != name || font.weight != input.weight || font.italic != input.italic) continue;
-      cached = true;
+      cached = true; resolved = true;
       if (Contains(font, codepoint, &backendError)) { *out = font; return true; }
       break;
     }
@@ -307,17 +312,42 @@ bool FontCollection::Select(const FontInput& input, uint32_t codepoint, Selected
         (!match && failed(family->GetFirstMatchingFont(DWRITE_FONT_WEIGHT(input.weight), DWRITE_FONT_STRETCH_NORMAL,
             input.italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, &match))) ||
         failed(match->CreateFontFace(&font.face))) continue;
+    resolved = true;
     font.family = name; font.weight = input.weight; font.italic = input.italic;
     font.syntheticItalic = input.italic && ((font.face->GetSimulations() & DWRITE_FONT_SIMULATIONS_OBLIQUE) ||
                                          match->GetStyle() == DWRITE_FONT_STYLE_NORMAL);
     // HarfBuzz consumes original tables; the donor applies synthetic ink skew itself.
     if (font.syntheticItalic) {
       if (FAILED(family->GetFirstMatchingFont(DWRITE_FONT_WEIGHT(input.weight), DWRITE_FONT_STRETCH_NORMAL,
-          DWRITE_FONT_STYLE_NORMAL, &match)) || FAILED(match->CreateFontFace(&font.face))) return false;
+          DWRITE_FONT_STYLE_NORMAL, &match)) || FAILED(match->CreateFontFace(&font.face))) { aborted = true; return false; }
     }
     if (selected.size() < 32) selected.push_back(font);
     if (Contains(font, codepoint, &backendError)) { *out = font; return true; }
   }
+    return false;
+  };
+  if (tryNames(memo->second)) return true;
+  if (aborted) return false;
+  // gfxFontGroup::FindFontForChar: with no family of the list installed, the
+  // platform default font (gfxDWriteFontList::GetDefaultFontForPlatform: Arial)
+  // comes before the pref-lang and system fallback.
+  if (!resolved) {
+    static const std::vector<std::wstring> kDefault = {L"Arial"};
+    if (tryNames(kDefault)) return true;
+    if (aborted) return false;
+  }
+  // gfxFontGroup::FindFontForChar: an emoji-presentation character tries the
+  // emoji preference list, then every character tries the pref-lang lists
+  // (WhichPrefFontSupportsChar) before the system fallback.
+  if (codepoint >= 0x1F000 || (codepoint >= 0x2600 && codepoint <= 0x27BF)) {
+    if (tryNames(EmojiFallbackFamilies())) return true;
+    if (aborted) return false;
+  }
+  if (tryNames(PrefFallbackFamilies(codepoint, input))) return true;
+  if (aborted) return false;
+  // gfxPlatformFontList::SystemFindFontForChar: CommonFontFallback first.
+  if (tryNames(CommonFallbackFamilies(codepoint))) return true;
+  if (aborted) return false;
   // Platform fallback queries the live collection, with no case-specific font names.
   const uint64_t fallbackKey = (uint64_t(codepoint) << 12) | (uint64_t(input.weight & 0x7ff) << 1) | input.italic;
   if (const auto known = fallbacks.find(fallbackKey); known != fallbacks.end()) {
@@ -346,5 +376,4 @@ bool FontCollection::Select(const FontInput& input, uint32_t codepoint, Selected
   return false;
 }
 }
-
 #endif

@@ -108,12 +108,13 @@ POSIX changes stay on the non-Windows side of the existing `#ifndef _WIN32` spli
 
 ## What already works
 
-- Unix-socket frames, worker `posix_spawn`, and the C ABI client.
-- Core Text font metrics and glyph masks.
+- Unix-socket frames, worker `posix_spawn`, and the C ABI client. The client install name is `@rpath/libruyijs_client.dylib`, with `@executable_path` on the rpath. `ruyijs_create`, `ruyijs_call`, and `ruyijs_close` still resolve.
+- Core Text font metrics and glyph masks. Canvas fills and `fillText` use Firefox's own Skia objects from the browser donor (`gfx/skia`). The typeface is `SkMakeTypefaceFromCTFont` on the Core Text font that face already holds. A solid fill was non-empty, and `fillText` left ink.
 - ImageIO still images: PNG, JPEG, GIF, WebP, BMP, and ICO, premultiplied BGRA. A multi-frame GIF uses ImageIO's already composited display frames.
 - SVG path bounds for M, L, C, Q, A, and Z.
 - WebCrypto SHA, AES-CBC, AES-GCM, HMAC, ECDSA, and ECDH. An ECDH parameter-dictionary failure returns false, and the caller surfaces `OperationError`.
-- Necko/NSS through the donor xpcshell. The Akamai example has passed with `init_real` set, over HTTP/2.
+- Necko/NSS through the donor xpcshell. A page navigation of `https://example.com/` with no donor environment returned status 200 and `h2`. The Akamai example has passed with `init_real` set, over HTTP/2.
+- `Context(tls="100".."159")` is accepted and copied onto the xpcshell as `NECKO_FIREFOX`. `necko_fetch.js` does not read it, so this xpcshell keeps the donor Firefox 159 ClientHello.
 
 CreepJS passed again after the adapter relink, including `svg` and `canvas 2d`, with no failed section.
 
@@ -126,7 +127,7 @@ These surfaces now call the same system and Firefox code the donor uses. They ar
 | Animated GIF | ImageIO display frames. Disposal is already applied, so a frame Windows clears to transparent can keep the background color. After decode, the repetition count is the GIF metadata value. |
 | APNG and animated WebP | ImageIO frames, then the shared blend. Scaling uses Core Graphics and leaves pixels premultiplied. |
 | Image color | The display ICC comes from `CGDisplayCopyColorSpace` and `CGColorSpaceCopyICCData`, then Firefox qcms. No profile leaves the pixels unchanged. |
-| Canvas text path | `CTFontCreatePathForGlyph`. `fillText` builds that path before the glyph mask. |
+| Canvas text | `CTFontCreatePathForGlyph` still builds outlines. Skia `fillText` uses `SkMakeTypefaceFromCTFont` on that same Core Text font. |
 | Font alias | `Osaka-Mono` maps to `Osaka` only when the PostScript name and the family both match. That is Firefox's single-face list, not a new table. |
 | COLR and CPAL | COLR version 0 and CPAL palette 0. Table bytes come from `CTFontCopyTable`. COLRv1 is not implemented. |
 | Glyph gamma | `SystemTextGamma` stays 1.8 and `SystemTextContrast` stays 1.0. `gasp` and `maxp` are readable. The mask does not invent a DirectWrite rendering mode. |
@@ -137,20 +138,20 @@ The DataDome example's homepage result is a server score. It is not a missing Ma
 
 ## Comparison with Windows
 
-Reviewed at `045752e` against the Windows x64 surface. A row marked "same source" is unfinished on both platforms.
+Reviewed against upstream 0.2.1. A row marked "same source" is unfinished on both platforms. This table describes the merged macOS shell. The previous local wheel and runtime zip were not rebuilt, and that zip is not a 0.2.1 archive.
 
 | Surface | Windows | macOS |
 | --- | --- | --- |
 | JS context, DOM, fingerprint, clock, Python bridge | Implemented | Same API |
-| Necko HTTP/1.1 and HTTP/2 | Implemented | Verified. An HTTPS frame returned status 200 and version 20 |
-| HTTP/3 | Part of the Necko transport described in the README | Donor XUL contains neqo. With the socket process off the version stays 20. With it on, this xpcshell closes the pipe |
-| TLS profiles 100–159 | Described in the README. This source tree has no selector | The donor's Firefox 159 NSS ClientHello |
+| Necko HTTP/1.1 and HTTP/2 | Implemented | Verified without the donor environment. A page navigation returned status 200 and version 20 (`h2`) |
+| HTTP/3 | Part of the Necko transport described in the README | Donor XUL contains neqo. With the socket process off, two direct requests stayed version 20 after the response sent `alt-svc` for `h3`. With the socket process on, this xpcshell exits with signal 11 and the log stays empty. No preference was added |
+| TLS profiles 100–159 | `Context(tls=)` | The same argument. It is copied to the xpcshell as `NECKO_FIREFOX`. This xpcshell script does not read it, so the ClientHello stays the donor Firefox 159 profile |
 | WebCrypto SHA, AES-CBC, AES-GCM, HMAC, ECDSA, ECDH | CNG | CommonCrypto and Security.framework |
 | Still images: PNG, JPEG, GIF, WebP, BMP, ICO | WIC | ImageIO, premultiplied BGRA |
 | Animated GIF | WIC disposal. A cleared frame can be transparent | ImageIO display frames. That area can keep the background color. Repetition comes from the GIF metadata |
 | APNG and animated WebP | Shared blend | ImageIO frames, then the shared blend. Core Graphics scaling leaves pixels premultiplied |
 | Image color | Display profile, then qcms | `CGDisplayCopyColorSpace` and `CGColorSpaceCopyICCData`, then qcms. No profile leaves the pixels unchanged |
-| Canvas text path and `fillText` | DirectWrite outline | `CTFontCreatePathForGlyph`, then the glyph mask |
+| Canvas text path and `fillText` | Skia, DirectWrite typeface | Skia objects from the browser donor. The typeface is `SkMakeTypefaceFromCTFont`. Outlines still use `CTFontCreatePathForGlyph` |
 | `strokeText` | Paints nothing | Paints nothing |
 | Font alias | The platform font list | `Osaka-Mono` maps to `Osaka` when the PostScript name and the family both match. That entry is Firefox's single-face list |
 | COLR and CPAL | Version 0, palette 0 | Version 0, palette 0. Table bytes come from `CTFontCopyTable` |
@@ -158,8 +159,8 @@ Reviewed at `045752e` against the Windows x64 surface. A row marked "same source
 | WebTransport | Shared C++. `webtransport_worker.py` is absent from the tree | Same sources. A live session uses the HTTP/3 path in the row above |
 | WebCodecs, audio decode, WebGPU, iframe navigation, customized built-ins, XML, form target | Same source | Interface only, or an explicit unimplemented error |
 | DataDome homepage | Server score | Server score. The example pass condition is unchanged |
-| Install | PyPI `win_amd64` wheel | Local `macosx_26_0_arm64` wheel. `runtime.json` stores size and sha256. The URL is empty |
-| C ABI client | DLL beside the shell | `libruyijs_client.dylib` still records the build-machine absolute path as its install name. Python loads that file by path |
+| Install | PyPI `win_amd64` wheel for 0.2.1 | The previous local `macosx_26_0_arm64` wheel was not rebuilt. `runtime.json` leaves `macos.url` empty. Its macOS size and sha256 describe that older zip, not this 0.2.1 shell |
+| C ABI client | DLL beside the shell | `libruyijs_client.dylib` install name `@rpath/libruyijs_client.dylib`, rpath `@executable_path`. XUL, xpcshell, and NSS names stay as Firefox wrote them |
 
 `image_wic.h` still contains a POSIX stub. macOS decode goes through ImageIO in `image_codec.cpp` and `image_gif.cpp`.
 
@@ -167,12 +168,12 @@ Reviewed at `045752e` against the Windows x64 surface. A row marked "same source
 
 The shell stays linked for `macosx_26_0_arm64`. Linux, Intel Macs, and macOS older than 26 stay outside this plan. New behavior comes from the Firefox donor or the system frameworks already linked: ImageIO, Core Text, Core Graphics, CommonCrypto, and Security.
 
-1. HTTP/3. Stay on the donor socket process and record why this xpcshell closes the pipe, from the logs that build already writes. The accepting result is version code 30. If this xpcshell cannot host that process, write that down and stop. WebTransport follows that result.
-2. TLS profiles. Find the existing Windows 100–159 selector before adding a Mac preference. Surface it on macOS only when the Firefox 159 donor already contains those profiles. Until then the Mac ClientHello is this donor's NSS.
-3. C client install name. `libruyijs_client.dylib` is built here. Point its install id at `@rpath/libruyijs_client.dylib` and keep `@executable_path`. Leave XUL, xpcshell, and NSS install names as Firefox wrote them.
+1. HTTP/3 is closed for this round. With the socket process off, a direct request and the one after it both stayed version 20, even though the response advertised `h3`. With the socket process on, this xpcshell exits with signal 11 and writes an empty log. No preference was committed, and no second QUIC stack was added. WebTransport stays behind a real version 30.
+2. TLS profiles. `Context(tls=)` is the upstream argument and is copied to the child as `NECKO_FIREFOX`. This xpcshell does not read that variable, so there is no second ClientHello table. Stop there. Do not add a JA3 switch.
+3. C client install name is done. `otool -D` prints `@rpath/libruyijs_client.dylib`, and the rpath is `@executable_path`.
 4. Image pixels. Keep ImageIO. A fixture can record the GIF background difference. Change pixels only when ImageIO already exposes the matching disposal.
-5. Font aliases. Add a name only when Firefox's `InitAliasesForSingleFaceList` in `gfxMacPlatformFontList.mm` already lists it.
-6. Publish. Leave `runtime.json` `macos.url` empty until a real archive URL exists. COLRv1 waits until the Windows parser reads past version 0.
+5. Font aliases. `Osaka-Mono` to `Osaka` is the only Mac alias. Mac family selection stays the Core Text cascade. The upstream pref-lang, SimSun, and Arial lists stay on the Windows side of `font_collection.cpp`.
+6. Publish. Leave `runtime.json` `macos.url` empty. The zip recorded there is the previous shell, not 0.2.1, and this round does not rebuild the wheel or the zip. COLRv1, Linux, Intel Macs, and macOS older than 26 stay out.
 
 ## What not to commit
 

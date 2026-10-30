@@ -166,6 +166,10 @@ JSObject* NewDrawingState(JSContext* cx, JS::MutableHandleObject out) {
   if (!dash) return nullptr;
   dashValue.setObject(*dash);
   if (!JS_SetElement(cx, state, kLineDash, dashValue)) return nullptr;
+  JS::RootedObject clips(cx, JS::NewArrayObject(cx, 0));
+  if (!clips) return nullptr;
+  JS::RootedValue clipsValue(cx, JS::ObjectValue(*clips));
+  if (!JS_SetElement(cx, state, kClips, clipsValue)) return nullptr;
   static const double kIdentity[6] = {1.0, 0.0, 0.0, 1.0, 0.0, 0.0};
   for (int32_t index = 0; index < 6; ++index) {
     JS::RootedValue value(cx, JS::NumberValue(kIdentity[index]));

@@ -19,6 +19,15 @@ namespace ruyijs::execution_scheduling { class Realm; }
 namespace ruyijs::web_platform { class Realm; }
 namespace ruyijs {
 struct BrowsingContext;
+// The response's Origin-Agent-Cluster field value ("" when absent).
+inline std::string AgentClusterHeader(const resource_network::HttpResult& http) {
+  for (const auto& field : http.headers) {
+    std::string key = field.first;
+    for (auto& c : key) if (c >= 'A' && c <= 'Z') c = char(c - 'A' + 'a');
+    if (key == "origin-agent-cluster") return field.second;
+  }
+  return std::string();
+}
 class Frames;
 class TopLevel;
 // Application coordinator for the `page` RPC (docs/owners/PAGE_LOAD.md) and for
@@ -138,7 +147,8 @@ class PageLoad final {
     resource_network::HttpResult http;
     // This navigation's timing record, measured against the same clock the
     // scheduling owner reads (docs/owners/NAVIGATION_TIMING.md).
-    double origin = 0, request_start = 0, response_start = 0, response_end = 0;
+    double origin = 0, fetch_start = 0, request_start = 0, response_start = 0, response_end = 0;
+    double dns_start = 0, dns_end = 0, connect_start = 0, secure_start = 0, connect_end = 0;
     uint16_t redirects = 0;
     bool browserInitiated = false;
   };

@@ -1,6 +1,7 @@
 #pragma once
 #include "domain/resource_network/referrer.h"
 #include "domain/resource_network/cookie_scope.h"
+#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -10,7 +11,9 @@ struct RequestDefaults {
   std::string source,target,userAgent,referrer,policy,initiator,mode,method;
   std::vector<std::string> languages;
   bool navigation=false,cors=false;
-  std::string redirectSite;
+  // URLs of the hops that redirected to `target`, oldest first (Firefox
+  // LoadInfo RedirectChain); Sec-Fetch-Site checks every one of them.
+  std::vector<std::string> redirectChain;
   // The top-level document URL and whether the request includes credentials:
   // Firefox's Storage Access Headers (nsHttpChannel::AddStorageAccessHeadersToRequest)
   // send "Sec-Fetch-Storage-Access: none" on a credentialed secure request that
@@ -34,6 +37,43 @@ inline std::string RequestSite(const std::string& from,const std::string& target
   if(source.protocol()!="http:"&&source.protocol()!="https:")return "none";
   if(source.origin()==url.origin())return "same-origin";
   return CookieSite(source)==CookieSite(url)?"same-site":"cross-site";
+}
+// nsMixedContentBlocker::IsPotentiallyTrustworthyLoopbackHost: localhost,
+// *.localhost, 127.0.0.0/8 and [::1].
+inline bool LoopbackHost(const std::string& host) {
+  if(host=="localhost"||host=="[::1]")return true;
+  if(host.size()>10&&host.compare(host.size()-10,10,".localhost")==0)return true;
+  if(host.compare(0,4,"127.")!=0)return false;
+  int parts=2;  // "127" and the part after it
+  for(size_t i=4;i<host.size();++i){
+    if(host[i]=='.'){++parts;continue;}
+    if(host[i]<'0'||host[i]>'9')return false;
+  }
+  return parts==4;
+}
+inline std::string BaseDomain(const CookieURL& url) {
+  const std::string site=CookieSite(url);
+  return site.substr(std::min(site.size(),url.protocol().size()));
+}
+// Firefox dom/security/SecFetch.cpp AddSecFetchSite: same-origin needs the
+// initiator and every redirect hop same-origin with the final URL; same-site
+// needs one base domain throughout, an https (or loopback) initiator and https
+// redirect hops. A browser-initiated request is "none" whatever it redirected through.
+inline std::string FetchSite(const std::string& from,const std::string& target,
+                             const std::vector<std::string>& chain) {
+  CookieURL source(from),url(target);
+  if(source.protocol()!="http:"&&source.protocol()!="https:")return "none";
+  bool sameOrigin=source.origin()==url.origin();
+  for(const auto& hop:chain)sameOrigin=sameOrigin&&CookieURL(hop).origin()==url.origin();
+  if(sameOrigin)return "same-origin";
+  const std::string domain=BaseDomain(url);
+  bool sameSite=BaseDomain(source)==domain&&
+      (source.protocol()=="https:"||LoopbackHost(BaseDomain(source)));
+  for(const auto& hop:chain) {
+    const CookieURL entry(hop);
+    sameSite=sameSite&&BaseDomain(entry)==domain&&entry.protocol()=="https:";
+  }
+  return sameSite?"same-site":"cross-site";
 }
 inline std::string DefaultReferrer(const RequestDefaults& d) {
   std::string policy=d.policy;
@@ -84,10 +124,7 @@ inline void AddRequestDefaults(const RequestDefaults& d,RequestHeaders& headers)
   if(CookieSecure(url)) {
     DefaultHeader(headers,"Sec-Fetch-Dest",destination);
     DefaultHeader(headers,"Sec-Fetch-Mode",mode);
-    std::string site=RequestSite(d.source,d.target);
-    if(d.redirectSite=="cross-site"||site=="none")site=d.redirectSite.empty()?site:d.redirectSite;
-    else if(d.redirectSite=="same-site"&&site=="same-origin")site="same-site";
-    DefaultHeader(headers,"Sec-Fetch-Site",site);
+    DefaultHeader(headers,"Sec-Fetch-Site",FetchSite(d.source,d.target,d.redirectChain));
     if(d.navigation&&d.userActivated)DefaultHeader(headers,"Sec-Fetch-User","?1");
     if(d.credentialed&&!d.navigation&&d.initiator!="beacon"&&!d.topLevel.empty()) {
       CookieURL top(d.topLevel);

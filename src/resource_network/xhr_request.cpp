@@ -31,12 +31,15 @@ bool Open(JSContext* cx, const JS::CallArgs& args, JS::HandleObject self) {
 bool Send(JSContext* cx, const JS::CallArgs& args, JS::HandleObject self) {
   auto& r = XhrData(self);
   if (!r.state.writable()) return XhrException(*r.owner, "InvalidStateError");
-  std::string body;
+  // XHR send() step 4: GET/HEAD ignore the body; otherwise Fetch "extract a
+  // body" gives bytes and a type that becomes Content-Type when none was set.
+  BodyRecord body;
   JS::RootedValue input(cx, args.get(0));
-  if (!input.isNullOrUndefined() && !EncodeBodyText(cx, input, &body)) return false;
-  if (body.size() > Limits::body_bytes) return Error(cx, "XHR body exceeds product limit", true);
+  if (r.method != "GET" && r.method != "HEAD" && !BodyInput(*r.owner, input, &body)) return false;
+  if (body.bytes.size() > Limits::body_bytes) return Error(cx, "XHR body exceeds product limit", true);
   if (!r.state.begin()) return XhrException(*r.owner, "InvalidStateError");
-  r.outgoing = std::move(body);
+  AddBodyContentType(body, &r.requestHeaders);
+  r.outgoing = std::move(body.bytes);
   r.urgent = r.owner->userInput && r.owner->userInput();
   const auto generation = r.state.generation;
   if (r.url.compare(0, 5, "blob:") == 0) {

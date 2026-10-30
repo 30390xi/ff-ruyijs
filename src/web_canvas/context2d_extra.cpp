@@ -1,20 +1,18 @@
-// The remaining public ruyijs methods. Drawing has no rasterizer (D35).
+// The remaining public ruyijs methods; drawImage draws through Firefox's Skia.
 #include "web_canvas/internal.h"
 #include "document_model/state.h"
 #include "web_media/image_codec.h"
+#include "web_canvas/skia_target.h"
 #include "js/ForOfIterator.h"
 #include "js/Realm.h"
-#include <cmath>
 
 namespace ruyijs::web_canvas {
-namespace {
-struct DrawPixels { uint32_t width = 0, height = 0; std::vector<uint8_t> bytes; };
-
-bool ReadDrawPixels(State& state, JS::HandleValue value, DrawPixels* out) {
+bool detail::ReadImagePixels(State& state, JS::HandleValue value, detail::SourcePixels* out) {
   if (!value.isObject()) return false;
   JS::RootedObject object(state.cx, js::CheckedUnwrapStatic(&value.toObject()));
   if (!object) return false;
   if (JS::GetClass(object) == &kBitmapClass) {
+    // ImageBitmap bytes are already premultiplied (image_bitmap_create.cpp).
     out->width = uint32_t(JS::GetReservedSlot(object, 0).toNumber());
     out->height = uint32_t(JS::GetReservedSlot(object, 1).toNumber());
     JS::Value slot = JS::GetReservedSlot(object, 2);
@@ -23,6 +21,16 @@ bool ReadDrawPixels(State& state, JS::HandleValue value, DrawPixels* out) {
     out->bytes.resize(JS_GetArrayBufferViewByteLength(view));
     if (!out->bytes.empty()) std::memcpy(out->bytes.data(), detail::ViewBytes(view), out->bytes.size());
     return out->width && out->height && out->bytes.size() >= size_t(out->width) * out->height * 4;
+  }
+  if (CanvasBinding* binding = state.Find(object)) {
+    // A canvas element: the snapshot of its premultiplied store.
+    JSObject* bitmap = detail::BitmapOf(binding);
+    const uint8_t* pixels = bitmap ? detail::ViewBytes(bitmap) : nullptr;
+    if (!pixels || !binding->width || !binding->height) return false;
+    out->width = binding->width;
+    out->height = binding->height;
+    out->bytes.assign(pixels, pixels + size_t(out->width) * out->height * 4);
+    return true;
   }
   if (JS::GetClass(object) == &document_model::kNodeClass) {
     auto* wrapper = static_cast<document_model::Wrapper*>(JS::GetReservedSlot(object, 0).toPrivate());
@@ -35,35 +43,122 @@ bool ReadDrawPixels(State& state, JS::HandleValue value, DrawPixels* out) {
     if (status != ruyijs::domain::web_media::ImageDecodeStatus::Ok || decoded.frames.empty()) return false;
     const auto& frame = decoded.frames.front();
     out->width = frame.width; out->height = frame.height; out->bytes = frame.pixels;
-    return out->width && out->height && out->bytes.size() >= size_t(out->width) * out->height * 4;
+    if (!out->width || !out->height || out->bytes.size() < size_t(out->width) * out->height * 4)
+      return false;
+    // The decoder output is straight alpha; Firefox's surface is premultiplied
+    // with gfx's (c * a + 254) / 255, and X8 when every pixel is opaque.
+    out->opaque = true;
+    for (size_t i = 0; i < size_t(out->width) * out->height; ++i) {
+      uint8_t* px = out->bytes.data() + i * 4;
+      const unsigned a = px[3];
+      if (a == 255) continue;
+      out->opaque = false;
+      for (int c = 0; c < 3; ++c) px[c] = uint8_t((unsigned(px[c]) * a + 254) / 255);
+    }
+    return true;
   }
   return false;
 }
 
+namespace {
+// CanvasRenderingContext2D.cpp ClipImageDimension.
+void ClipImageDimension(double& sourceCoord, double& sourceSize, double clipOrigin,
+                        double clipSize, double& destCoord, double& destSize) {
+  const double scale = destSize / sourceSize;
+  double relative = sourceCoord - clipOrigin;
+  if (relative < 0.0) {
+    const double destEnd = destCoord + destSize;
+    destCoord -= relative * scale;
+    destSize = destEnd - destCoord;
+    sourceSize += relative;
+    sourceCoord = clipOrigin;
+    relative = 0.0;
+  }
+  const double delta = clipSize - (relative + sourceSize);
+  if (delta < 0.0) {
+    destSize += delta * scale;
+    sourceSize = clipSize - relative;
+  }
+}
+
+// ValidateRect(…, true): float-finite, negative sizes flipped.
+bool ValidateRect(double rect[4]) {
+  for (int i = 0; i < 4; ++i)
+    if (!std::isfinite(float(rect[i]))) return false;
+  if (rect[2] < 0) { rect[2] = -rect[2]; rect[0] -= rect[2]; }
+  if (rect[3] < 0) { rect[3] = -rect[3]; rect[1] -= rect[3]; }
+  return true;
+}
+
+// CanvasRenderingContext2D::DrawImage for the 3-, 5- and 9-argument forms.
 bool DrawImagePixels(State& state, JS::HandleObject context, JS::HandleValue image,
                      const double* values, unsigned count) {
-  DrawPixels source;
-  if (!ReadDrawPixels(state, image, &source)) return true;
+  JSContext* cx = state.cx;
+  double source[4] = {0, 0, 0, 0}, dest[4] = {0, 0, 0, 0};
+  if (count == 2) { dest[0] = values[0]; dest[1] = values[1]; }
+  else if (count == 4) { for (int i = 0; i < 4; ++i) dest[i] = values[i]; }
+  else { for (int i = 0; i < 4; ++i) { source[i] = values[i]; dest[i] = values[4 + i]; } }
+  if (!ValidateRect(dest)) return true;
+  if (count == 8 && !ValidateRect(source)) return true;
+  detail::SourcePixels pixels;
+  if (!detail::ReadImagePixels(state, image, &pixels)) return true;
+  const double width = pixels.width, height = pixels.height;
+  if (count == 2) {
+    source[2] = width; source[3] = height;
+    dest[2] = width; dest[3] = height;
+  } else if (count == 4) {
+    source[2] = width; source[3] = height;
+  }
+  if (source[2] == 0.0 || source[3] == 0.0) return true;
+  ClipImageDimension(source[0], source[2], 0.0, width, dest[0], dest[2]);
+  ClipImageDimension(source[1], source[3], 0.0, height, dest[1], dest[3]);
+  if (source[2] <= 0.0 || source[3] <= 0.0 || dest[2] <= 0.0 || dest[3] <= 0.0) return true;
+  if (float(source[2]) <= 0.0 || float(source[3]) <= 0.0 || float(dest[2]) <= 0.0 ||
+      float(dest[3]) <= 0.0) {
+    return true;
+  }
   CanvasBinding* binding = detail::BindingOf(state, context);
   JSObject* target = detail::BitmapOf(binding);
-  if (!binding || !target) return true;
-  uint8_t* dst = detail::ViewBytes(target);
-  if (!dst) return true;
-  double sx = 0, sy = 0, sw = source.width, sh = source.height;
-  double dx = 0, dy = 0, dw = source.width, dh = source.height;
-  if (count == 2) { dx = values[0]; dy = values[1]; }
-  else if (count == 4) { dx = values[0]; dy = values[1]; dw = values[2]; dh = values[3]; }
-  else { sx = values[0]; sy = values[1]; sw = values[2]; sh = values[3]; dx = values[4]; dy = values[5]; dw = values[6]; dh = values[7]; }
-  if (!(sw > 0 && sh > 0 && dw > 0 && dh > 0)) return true;
-  const int x0 = std::max(0, int(std::floor(dx))), y0 = std::max(0, int(std::floor(dy)));
-  const int x1 = std::min(int(binding->width), int(std::ceil(dx + dw)));
-  const int y1 = std::min(int(binding->height), int(std::ceil(dy + dh)));
-  for (int y = y0; y < y1; ++y) for (int x = x0; x < x1; ++x) {
-    const int tx = std::clamp(int((x - dx) * source.width / dw + sx), 0, int(source.width) - 1);
-    const int ty = std::clamp(int((y - dy) * source.height / dh + sy), 0, int(source.height) - 1);
-    std::memcpy(dst + (size_t(y) * binding->width + x) * 4,
-                source.bytes.data() + (size_t(ty) * source.width + tx) * 4, 4);
+  uint8_t* bytes = target ? detail::ViewBytes(target) : nullptr;
+  if (!binding || !bytes) return true;
+  JS::RootedObject drawing(cx, detail::DrawingState(cx, context));
+  if (!drawing) return false;
+  double matrix[6];
+  if (!detail::GetMatrix(cx, context, matrix)) return false;
+  // gfx::Matrix::ScaleFactors over the float transform.
+  const float m11 = float(matrix[0]), m12 = float(matrix[1]), m21 = float(matrix[2]),
+              m22 = float(matrix[3]);
+  float det = m11 * m22 - m12 * m21, xScale = 0, yScale = 0;
+  if (det != 0.0f) {
+    xScale = sqrtf(m11 * m11 + m12 * m12);
+    if (det < 0.0f) det = -det;
+    if (xScale) yScale = det / xScale;
   }
+  const bool downScale = dest[2] * std::fabs(xScale) < source[2] &&
+                         dest[3] * std::fabs(yScale) < source[3];
+  JS::RootedValue value(cx);
+  if (!JS_GetElement(cx, drawing, uint32_t(kImageSmoothingEnabled), &value)) return false;
+  const bool smoothing = !value.isBoolean() || value.toBoolean();
+  const bool linear = smoothing || downScale;
+  skia::DrawOptions options;
+  if (!JS_GetElement(cx, drawing, uint32_t(kGlobalAlpha), &value)) return false;
+  options.alpha = value.isNumber() ? float(value.toNumber()) : 1.0f;
+  if (!JS_GetElement(cx, drawing, uint32_t(kGlobalCompositeOperation), &value)) return false;
+  if (value.isString()) {
+    JS::RootedString text(cx, value.toString());
+    if (!detail::StringToAscii(cx, text, &options.composite)) return false;
+  }
+  options.antialias = linear;
+  std::vector<skia::Clip> clips;
+  if (!ReadCanvasClips(cx, context, &clips)) return false;
+  const skia::Surface surface{bytes, int(binding->width), int(binding->height), &clips};
+  const skia::Image source_image{pixels.bytes.data(), int(pixels.width), int(pixels.height),
+                                 pixels.opaque};
+  skia::ShadowStyle shadow;
+  bool shadowed = false;
+  if (!ReadCanvasShadow(cx, context, &shadow, &shadowed)) return false;
+  skia::DrawImage(surface, matrix, source_image, source, dest, linear, options,
+                  shadowed ? &shadow : nullptr);
   return true;
 }
 } // namespace
@@ -108,7 +203,7 @@ bool Context2DExtra(JSContext* cx, unsigned argc, JS::Value* vp) {
         if (!JS::ToNumber(cx, value, &number)) return false;
         valid &= std::isfinite(number) && number >= 0;
         if (n >= 8192) return WebKit::Fail(cx, "Line dash limit exceeded");
-        value.setNumber(number);
+        value.setNumber(double(float(number)));  // ContextState::dash is Float
         if (!JS_SetElement(cx, dash, n++, value)) return false;
       }
       if (!valid) return true;
@@ -126,18 +221,26 @@ bool Context2DExtra(JSContext* cx, unsigned argc, JS::Value* vp) {
     args.rval().setObject(*dash);
     return true;
   }
-  // stroke/clip validate optional Path2D and fill rule; no pixels are painted.
+  // stroke() strokes the current path or a Path2D through Skia; clip()
+  // pushes it onto the drawing state's clip list.
   if (op == 5 || op == 6) {
     unsigned rule = 0;
-    if (args.get(0).isObject() && JS::GetClass(&args[0].toObject()) == &kPath2DClass) rule = 1;
+    bool evenOdd = false;
+    JS::RootedObject owner(cx, self);
+    if (args.get(0).isObject() && JS::GetClass(&args[0].toObject()) == &kPath2DClass) {
+      rule = 1;
+      owner = &args[0].toObject();
+    }
     if (op == 6 && !args.get(rule).isUndefined()) {
       JS::RootedString text(cx, JS::ToString(cx, args.get(rule)));
       bool a, b;
       if (!text || !detail::StringEqualsAscii(cx, text, "nonzero", &a) ||
           !detail::StringEqualsAscii(cx, text, "evenodd", &b)) return false;
       if (!a && !b) return WebKit::Fail(cx, "Invalid CanvasFillRule");
+      evenOdd = b;
     }
-    return true;
+    if (op == 5) return StrokeRecordedPath(s, self, owner);
+    return RecordClip(cx, self, owner, evenOdd);
   }
   if (op == 12) return true; // Offscreen commit, no presentation device.
   unsigned first = op == 8 || op == 9 ? 1 : 0;
@@ -154,6 +257,18 @@ bool Context2DExtra(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (op == 9 && usable && !DrawImagePixels(s, self, args[0], values, count)) return false;
   if (op == 10 && usable && values[4] < 0)
     return ThrowDOMException(s, "IndexSizeError", "Negative radius");
+  if (op == 7 && usable) return StrokeRecordedRect(s, self, values);
+  if (op == 8 && usable) {
+    JS::RootedString text(cx, JS::ToString(cx, args[0]));
+    std::u16string units;
+    if (!text || !detail::StringUnits(cx, text, &units)) return false;
+    return StrokeRecordedText(s, self, units, values[0], values[1], count > 2 ? values[2] : NAN);
+  }
+  if (op == 10 && usable) {
+    // arcTo is replayed by the Skia path builder (opcode 10).
+    const double command[6] = {10.0, values[0], values[1], values[2], values[3], values[4]};
+    return AppendCanvasPath(cx, self, command, 6);
+  }
   return true;
 }
 bool InstallContext2DExtra(State& s, WebFace& face) {

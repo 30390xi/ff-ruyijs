@@ -19,7 +19,7 @@ struct Session {
   bool Start() {
     std::wstring python;
     if (!NeckoPythonPath(&python) || !input.Open(true) || !output.Open(false) ||
-        !worker.Start(python, input, output, L"--session --timing-v2")) return false;
+        !worker.Start(python, input, output, L"--session --timing-v3")) return false;
     input.CloseChild();
     output.CloseChild();
     return true;
