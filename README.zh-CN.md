@@ -62,7 +62,7 @@ python -m pip install --upgrade ruyijs
 验证安装：
 ```python
 import ruyijs
-print(ruyijs.__version__)   # 0.1.6
+print(ruyijs.__version__)   # 0.2.1
 ```
 
 ## 🚀 快速开始
@@ -141,7 +141,7 @@ with Context() as context:
 
 ### 基于 Necko 的原生网络
 
-页面内 `fetch` 与 XHR 走真实 HTTP/1.1、2、3，并通过按上下文隔离的代理。用 `put_resource()` 自行提供响应即可离线复跑整条已捕获的流程。用 `net_log()` 查看每一次请求。
+页面内 `fetch` 与 XHR 走真实 HTTP/1.1、2、3，并通过按上下文隔离的代理。用 `put_resource()` 自行提供响应即可离线复跑整条已捕获的流程。用 `net_log()` 查看每一次请求。 macOS 源码构建验收过的是 HTTP/1.1 和 HTTP/2，界限见 `docs/macos.zh-CN.md`。
 
 ### 原生 TLS 指纹 —— 自由切换 Firefox 100 – 159
 
@@ -149,7 +149,7 @@ with Context() as context:
 
 Necko 传输层可**自由切换 Firefox 100 – 159 的 TLS 配置**，每个版本均精确复现该版本的 ClientHello，在线上呈现不同的 JA3 / JA4 指纹——可用于轮换浏览器身份、规避按版本封禁，或测试站点对不同 Firefox 版本的反应。
 
-每个 Context 用 `tls=` 选择版本（`"100"`–`"159"`，默认 159）。它只改变该 Context 的 Necko 传输层的 TLS ClientHello、HTTP/2 设置和 HTTP/3 优先级；如需页面内一致，请用 `configure_fingerprint` 设置对应版本的 User-Agent。
+每个 Context 用 `tls=` 选择版本（`"100"`–`"159"`，默认 159）。它只改变该 Context 的 Necko 传输层的 TLS ClientHello、HTTP/2 设置和 HTTP/3 优先级；如需页面内一致，请用 `configure_fingerprint` 设置对应版本的 User-Agent。 macOS 源码构建会接受这个参数并写入 xpcshell 环境，该 xpcshell 不读取它（`docs/macos.zh-CN.md`）。
 
 ```python
 with Context(proxy="http://127.0.0.1:7890", timeout=30, tls="120") as context:

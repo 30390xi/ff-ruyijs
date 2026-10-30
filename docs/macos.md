@@ -4,11 +4,13 @@ This is the maintainer path for the macOS shell. Windows x64 still installs from
 
 The same facts are written in [macos.zh-CN.md](macos.zh-CN.md).
 
-## Branches
+## What the macOS port adds
 
-`main` on the macOS maintainer line is this macOS branch. `release/macos` is the release branch. A fix lands on `release/macos` first, and `main` fast-forwards to that same commit. After each accepted fix the two branches match.
+The shared Python API, DOM, clock, and page logic stay one source tree. macOS adds the outer shell: a Unix-socket frame, an xpcshell Necko helper, Core Text, ImageIO, and Firefox's own Skia objects from the browser donor. The C client install name is `@rpath/libruyijs_client.dylib`.
 
-The upstream repository stays on the fetch-only `upstream` remote. Cut the update branch from `release/macos`, merge upstream there, review it, and merge it back into `release/macos`. Do not merge upstream into `main` directly.
+- Same API: JS contexts, DOM, the Python bridge, WebCrypto algorithms, and the static image formats.
+- Acceptable platform differences: a named pipe or a Unix socket, CNG or CommonCrypto, WIC or ImageIO, DirectWrite or Core Text. GIF disposal, glyph gamma, and CJK fallback follow the system decoder. They are not pixel-identical to Windows.
+- Not in this port: HTTP/3 stays version 20 while the socket process is off. `Context(tls=)` is copied to `NECKO_FIREFOX`, and this xpcshell does not read it. DNS, connect, and TLS timing slots stay 0. There is no macOS PyPI wheel, and `macos.url` stays empty.
 
 ## What lives where
 
@@ -188,3 +190,7 @@ Do not commit the Firefox tree, either objdir, `dist/js`, the helper venv, the m
 ## Reporting a macOS issue
 
 Include the ruyijs commit, the macOS version, the Xcode version, the Python version, the Firefox tag, and which of the two objdirs the build used.
+
+## Maintainer fork
+
+Upstream `main` stays the Windows release line. On the macOS maintainer fork, fixes land on `release/macos` first and that fork's `main` fast-forwards to the same commit. An upstream update is merged on a branch cut from `release/macos`, reviewed, and merged back. It is not merged into that fork's `main` directly.

@@ -62,7 +62,7 @@ python -m pip install --upgrade ruyijs
 To verify the installation:
 ```python
 import ruyijs
-print(ruyijs.__version__)   # 0.1.6
+print(ruyijs.__version__)   # 0.2.1
 ```
 
 ## 🚀 Quick start
@@ -141,7 +141,7 @@ with Context() as context:
 
 ### Native network over Necko
 
-In-page `fetch` and XHR ride real HTTP/1.1, 2, and 3, through a proxy scoped to the context. Serve responses yourself with `put_resource()` to replay an entire captured flow offline. Inspect every request with `net_log()`.
+In-page `fetch` and XHR ride real HTTP/1.1, 2, and 3, through a proxy scoped to the context. Serve responses yourself with `put_resource()` to replay an entire captured flow offline. Inspect every request with `net_log()`. The macOS source build's verified path is HTTP/1.1 and HTTP/2; the boundary is in `docs/macos.md`.
 
 ### Native TLS fingerprint — switchable across Firefox 100 – 159
 
@@ -149,7 +149,7 @@ The network stack is Firefox's own **Necko + NSS** (the same TLS library real Fi
 
 The Necko transport can **freely switch between Firefox 100 – 159 TLS profiles**. Each profile reproduces that version's exact ClientHello, giving you a different JA3 / JA4 fingerprint on the wire — useful for rotating browser identities, evading per-version blocks, or testing how a site reacts to different Firefox releases.
 
-Choose the release per context with `tls=` (`"100"`–`"159"`; default 159). It sets the TLS ClientHello, HTTP/2 settings and HTTP/3 priorities of that context's Necko transport only; set a matching user agent with `configure_fingerprint` when the page should agree.
+Choose the release per context with `tls=` (`"100"`–`"159"`; default 159). It sets the TLS ClientHello, HTTP/2 settings and HTTP/3 priorities of that context's Necko transport only; set a matching user agent with `configure_fingerprint` when the page should agree. On the macOS source build the argument is accepted and copied to the xpcshell environment, and that xpcshell does not read it (`docs/macos.md`).
 
 ```python
 with Context(proxy="http://127.0.0.1:7890", timeout=30, tls="120") as context:
