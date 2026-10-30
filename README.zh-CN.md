@@ -305,7 +305,7 @@ python -m ruyijs.examples creepjs
 <table>
 <tr>
 <td align="center"><img src="assets/wechat-qr.jpg" alt="微信 — 如意" width="220"><br><b>微信：</b>如意</td>
-<td align="center"><img src="assets/wechat-group-qr.jpg" alt="交流群 — AI 浏览器过检测交流群" width="220"><br><b>交流群：</b>AI 浏览器过检测交流群</td>
+<td align="center"><img src="assets/wechat-group-qr.jpg" alt="交流群 — AI浏览器ruyijs过检测交流群3" width="220"><br><b>交流群：</b>AI浏览器ruyijs过检测交流群3</td>
 </tr>
 </table>
 

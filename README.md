@@ -305,7 +305,7 @@ Questions, permission requests, commercial licensing, or just to talk shop — a
 <table>
 <tr>
 <td align="center"><img src="assets/wechat-qr.jpg" alt="WeChat QR — 如意" width="220"><br><b>WeChat:</b> 如意</td>
-<td align="center"><img src="assets/wechat-group-qr.jpg" alt="Group — AI 浏览器交流群" width="220"><br><b>Group:</b> AI 浏览器交流群</td>
+<td align="center"><img src="assets/wechat-group-qr.jpg" alt="Group — AI浏览器ruyijs过检测交流群3" width="220"><br><b>Group:</b> AI浏览器ruyijs过检测交流群3</td>
 </tr>
 </table>
 
