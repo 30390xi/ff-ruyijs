@@ -1,4 +1,5 @@
 #include "web_geometry/font_backend.h"
+#include <dwrite_3.h>
 #include <algorithm>
 #include <cmath>
 

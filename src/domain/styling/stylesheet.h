@@ -570,7 +570,7 @@ public:
             "text-indent", "text-transform", "white-space", "visibility", "cursor",
             "direction", "list-style", "list-style-type", "list-style-position",
             "list-style-image", "quotes", "border-collapse", "border-spacing",
-            "caption-side", "empty-cells", "orphans", "widows"};
+            "caption-side", "empty-cells", "orphans", "widows", "text-rendering"};
         return std::find(names.begin(), names.end(), property) != names.end();
     }
 

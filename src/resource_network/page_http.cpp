@@ -261,7 +261,10 @@ void HttpExchange::Complete(HttpResult&& response) {
     const double end=model_.HttpNow();
     auto offset=[&](double tick) {return tick>0?std::clamp(hopStart_+tick-hopTick_,hopStart_,end):0;};
     timings_.push_back({url_,response.headers,hopStart_,end,offset(response.requestTick),
-                       offset(response.responseTick),offset(response.headersTick)});
+                       offset(response.responseTick),offset(response.headersTick),
+                       offset(response.dnsStartTick),offset(response.dnsEndTick),
+                       offset(response.connectStartTick),offset(response.secureTick),
+                       offset(response.connectEndTick)});
   }
   response.finalURL = url_;
   response.crossOrigin = crossOriginTainted_;

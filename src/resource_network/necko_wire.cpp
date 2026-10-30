@@ -56,15 +56,24 @@ bool ReadNeckoResponse(NeckoPipe& pipe, HttpResult* result, ULONGLONG deadline, 
   result->body.assign(size, '\0');
   uint32_t version=0;
   if(!pipe.Read(result->body.data(),size,deadline)||!pipe.Read(&version,4,deadline)||
-     (version!=0x31545252&&version!=0x32545252)||
+     (version!=0x31545252&&version!=0x32545252&&version!=0x33545252)||
      !pipe.Read(&result->encodedBytes,8,deadline)||!pipe.Read(&result->decodedBytes,8,deadline)||
      !ReadText(pipe,&result->protocol,deadline)||result->protocol.size()>32||result->decodedBytes!=size)return false;
-  if(version==0x32545252) {
+  if(version==0x32545252||version==0x33545252) {
     if(!pipe.Read(&result->requestTick,8,deadline)||!pipe.Read(&result->responseTick,8,deadline)||
        !pipe.Read(&result->headersTick,8,deadline))return false;
     const double a=result->requestTick,b=result->responseTick,c=result->headersTick;
     if(!std::isfinite(a)||!std::isfinite(b)||!std::isfinite(c)||a<0||b<0||c<0||
        (b&&(!a||b<a))||(c&&(!a||c<a||c<b)))return false;
+  }
+  if(version==0x33545252) {
+    double* establish[]={&result->dnsStartTick,&result->dnsEndTick,&result->connectStartTick,
+                         &result->secureTick,&result->connectEndTick};
+    for(double* field:establish)if(!pipe.Read(field,8,deadline))return false;
+    // Observations only: an implausible one is dropped (read as fetchStart),
+    // never a reason to fail the response.
+    for(double* field:establish)
+      if(!std::isfinite(*field)||*field<0||(result->requestTick&&*field>result->requestTick))*field=0;
   }
   result->transferred=true;
   if (framed) *framed = true;

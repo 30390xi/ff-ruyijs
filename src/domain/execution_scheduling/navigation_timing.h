@@ -12,6 +12,10 @@ struct NavigationTiming {
   double time_origin = 0;
   double request_start = 0;
   std::optional<double> fetch_start;
+  // Connection establishment (offsets, already resolved to the earlier phase
+  // for a reused connection); secure_start is 0 without TLS.
+  double dns_start = 0, dns_end = 0, connect_start = 0, connect_end = 0, secure_start = 0;
+  bool establishment = false;  // set by a measured navigation
   double response_start = 0;
   double response_end = 0;
   double dom_interactive = 0;

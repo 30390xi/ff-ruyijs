@@ -147,7 +147,8 @@ class PageLoad final {
     resource_network::HttpResult http;
     // This navigation's timing record, measured against the same clock the
     // scheduling owner reads (docs/owners/NAVIGATION_TIMING.md).
-    double origin = 0, request_start = 0, response_start = 0, response_end = 0;
+    double origin = 0, fetch_start = 0, request_start = 0, response_start = 0, response_end = 0;
+    double dns_start = 0, dns_end = 0, connect_start = 0, secure_start = 0, connect_end = 0;
     uint16_t redirects = 0;
     bool browserInitiated = false;
   };

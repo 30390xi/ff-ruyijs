@@ -14,8 +14,17 @@ struct FontInput {
   float scale = 1;
   unsigned weight = 400;
   bool italic = false;
+  // gfx::ShapedTextFlags::TEXT_OPTIMIZE_SPEED: the text run carries no
+  // TEXT_NEED_BOUNDING_BOX, so LOOSE_INK_EXTENTS measurement (SVG run rects,
+  // frame ink overflow) skips the glyph extents of simple glyphs.
+  bool optimizeSpeed = false;
   ruyijs::domain::geometry::SvgMatrix transform;
 };
+// nsLayoutUtils::GetTextRunFlagsForStyle: text-rendering:optimizeSpeed, or
+// auto below browser.display.auto_quality_min_font_size (20 device pixels).
+bool TextRunOptimizeSpeed(const std::string& textRendering, double cssFontSize);
+// window.devicePixelRatio of the profile, for device-pixel prefs in layout.
+void SetDevicePixelRatio(double ratio);
 struct FontCollection;
 // font.default.<group> for the browser locale's language group ("serif" if unset).
 std::string DefaultGenericFamily();

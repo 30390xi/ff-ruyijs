@@ -1,4 +1,5 @@
 #include "interaction/internal.h"
+#include <cmath>
 #include "interaction/close_watcher.h"
 #include "runtime/exception_capture.h"
 #include "js/CallAndConstruct.h"
@@ -41,6 +42,18 @@ void State::invoke(std::shared_ptr<Listener> listener, domain::DomEvent& value, 
 void Realm::SetMicrotaskCheckpointPort(void (*port)(void*), void* context) {
   state_->microtaskCheckpoint = port;
   state_->microtaskContext = context;
+}
+void Realm::SetEventClockPort(double (*now)(void*, double), double (*reduce)(void*, double),
+                              void* context) {
+  state_->eventClock = now; state_->eventReduce = reduce; state_->eventClockContext = context;
+}
+double State::EventTime(double clock_ms) const {
+  if (eventClock) {
+    const double value = eventClock(eventClockContext, clock_ms);
+    if (std::isfinite(value)) return value;
+  }
+  return clock_ms >= 0 ? clock_ms
+      : std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
 }
 void Realm::SetBrandPort(bool (*port)(void*, int, JS::HandleValue, bool*), void* context) {
   state_->brandPort = port;
@@ -111,8 +124,7 @@ bool FireTargetEvent(State& state,JS::HandleObject target,const char* type,bool 
   if (!InstallTrusted(state, object)) return false;
   auto event = std::make_unique<Event>(cx, object, text, std::move(key), bubbles, cancelable);
   event->value.mark_trusted();
-  event->value.set_time_stamp(std::chrono::duration<double, std::milli>(
-      std::chrono::steady_clock::now() - state.started).count());
+  event->value.set_time_stamp(state.EventTime());
   Event& entry = *event;
   state.events.push_back(std::move(event));
   PreparedPath path(cx);

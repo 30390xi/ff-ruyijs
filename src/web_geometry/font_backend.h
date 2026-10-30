@@ -93,6 +93,9 @@ double FrameMaxDescent(const DWRITE_FONT_METRICS& metrics, double conv, double m
 // for a character, and the emoji preference list.
 std::vector<std::wstring> PrefFallbackFamilies(uint32_t codepoint, const FontInput&);
 std::vector<std::wstring> EmojiFallbackFamilies();
+// gfxWindowsPlatform::GetCommonFallbackFonts: the per-script system fallback
+// families tried (CommonFontFallback) before the global font scan.
+std::vector<std::wstring> CommonFallbackFamilies(uint32_t codepoint);
 bool ShapeFont(const SelectedFont&, const FontInput&, const std::u16string&, FontRun*);
 bool CanvasFontBaselines(const SelectedFont&, const FontInput&, CanvasTextMetrics*);
 bool MissingFontRun(const SelectedFont&, const FontInput&, uint32_t codepoint,

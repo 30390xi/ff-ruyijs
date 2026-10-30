@@ -11,13 +11,20 @@ enum PerfSlot { PClock, PTimeline, PEntries, PPrototypes, PException, PTiming, P
                 // This document's navigation record (domain
                 // NavigationTiming). One per Performance owner, so a retired
                 // document never reads the next document's values.
-                PNavTiming, PerfSlots };
+                PNavTiming,
+                // RelativeTimeline::GetRandomTimelineSeed of this document, as two int32 halves.
+                PSeedLow, PSeedHigh, PerfSlots };
 enum EntrySlot { EKind, EName, EStart, EDuration, EDetail, EntrySlots };
 enum PerfKind { Entry, Mark, MeasureEntry, Resource, NavigationEntry, Paint, EventTiming,
                 LargestPaint, ServerTiming, LegacyTiming, LegacyNavigation, KindCount };
 enum PerfOp { Now, Json, Entries, ByType, ByName, ClearResources, BufferSize, AddMark,
               ClearMarks, AddMeasure, ClearMeasures, Origin, TimingObject, NavigationObject, Handler, InteractionCount, EventCountsObject };
 extern const JSClass kEntryClass, kLegacyTimingClass, kLegacyNavigationClass;
+// The document's timeline seed (the jitter mix-in of its relative times).
+int64_t PerfTimelineSeed(JSObject* owner);
+// A relative (time-origin based) timestamp as content reads it: Firefox's
+// 1 ms jittered clamp, or the logical clock's own whole milliseconds.
+double PerfReduce(JSObject* owner, double ms);
 struct PerfField {const char* name;};
 struct PerfSchema {const char* name;int parent;const char* const* fields;unsigned count;bool json;bool worker;};
 extern const PerfSchema kPerfSchema[KindCount];

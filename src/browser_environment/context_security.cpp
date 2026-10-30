@@ -47,6 +47,16 @@ bool Environment::ReadSourceSnapshot(SourceSnapshot* result) {
       !state_->ReadSecureContext(&snapshot.secure)) return false;
   *result = std::move(snapshot); return true;
 }
+bool Environment::ReadDevicePixelRatio(double* result) {
+  *result = 1;
+  if (!state_ || state_->shared) return true;
+  JSAutoRealm realm(state_->cx, state_->page);
+  if (!state_->Baseline()) return false;
+  JS::RootedValue value(state_->cx);
+  if (!state_->Read(Kind::Viewport, kViewportDevicePixelRatio, ValueType::Number, &value)) return false;
+  if (value.isNumber() && value.toNumber() > 0) *result = value.toNumber();
+  return true;
+}
 bool Environment::ReadLanguage(std::string* result) {
   result->clear();
   if (!state_) return false;

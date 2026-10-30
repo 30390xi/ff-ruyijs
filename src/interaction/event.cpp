@@ -97,8 +97,7 @@ bool EventConstructor(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (!InstallTrusted(*state, object)) return false;
   auto event = std::make_unique<Event>(cx, object, type, std::move(key), bubbles, cancelable);
   event->value.set_composed(composed);
-  event->value.set_time_stamp(std::chrono::duration<double, std::milli>(
-      std::chrono::steady_clock::now() - state->started).count());
+  event->value.set_time_stamp(state->EventTime());
   state->events.push_back(std::move(event));
   args.rval().setObject(*object); return trace.Finish(true);
 }

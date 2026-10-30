@@ -4,11 +4,12 @@ namespace ruyijs::execution_scheduling {
 namespace {
 const char* const base[]={"name","entryType","startTime","duration"};
 const char* const detail[]={"detail"};
-const char* const resource[]={"initiatorType","nextHopProtocol","workerStart","redirectStart",
+// PerformanceResourceTiming.webidl order: deliveryType follows initiatorType.
+const char* const resource[]={"initiatorType","deliveryType","nextHopProtocol","workerStart","redirectStart",
  "redirectEnd","fetchStart","domainLookupStart","domainLookupEnd","connectStart","connectEnd",
  "secureConnectionStart","requestStart","finalResponseHeadersStart","firstInterimResponseStart",
  "responseStart","responseEnd","transferSize","encodedBodySize","decodedBodySize","responseStatus",
- "contentType","serverTiming","deliveryType"};
+ "contentType","serverTiming"};
 const char* const navigation[]={"unloadEventStart","unloadEventEnd","domInteractive",
  "domContentLoadedEventStart","domContentLoadedEventEnd","domComplete","loadEventStart",
  "loadEventEnd","type","redirectCount"};

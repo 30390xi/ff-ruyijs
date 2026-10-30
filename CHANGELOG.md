@@ -5,6 +5,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-30
+
+### Fixed
+
+- Timer precision is Firefox 159's: `performance.now()`, `timeOrigin`,
+  `Date.now()`, `Event.timeStamp` and every navigation / resource time are
+  clamped to 1 ms with Firefox's jittered rounding (`nsRFPService`), one seed
+  per document. `Event.timeStamp` is on the document's performance timeline.
+- Navigation and resource timing report the measured DNS, connect and TLS
+  phases from Necko (a reused connection reads `fetchStart`, as in Firefox);
+  a browser-initiated load's `fetchStart` precedes `navigationStart`.
+  `deliveryType` is in Firefox's member order; unreached milestones read 0.
+- Necko resolves IP literals without a lookup and caches names
+  (`network.dnsCacheExpiration` 60 s, 1600 entries).
+- Layout: CSS margin collapsing, 17 px classic scrollbars on the viewport and
+  scroll containers, root `clientWidth/Height` and `scrollWidth/Height` from
+  the scrollport, `scrollTopMax` / `scrollLeftMax`, `clientTop` /
+  `clientLeft`, `window.scrollMaxX/Y`.
+- Fonts: SimSun line height (bad-underline metrics), the Arial default when no
+  listed family is installed, Firefox's per-script system fallback list.
+- SVG text `getBBox`: font box versus frame descent, and no glyph ink below
+  20 px (`text-rendering: auto`).
+- Example result files no longer ship in the wheel.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added

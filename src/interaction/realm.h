@@ -174,6 +174,10 @@ class Realm {
   // Brand checks of other owners' objects for event init dictionaries:
   // brand 0 Element, 1 MediaStreamTrack, 2 DOMException. Bound by the runtime.
   void SetBrandPort(bool (*port)(void*, int brand, JS::HandleValue, bool* matches), void* context);
+  // The document clock for Event.timeStamp: creation time relative to the
+  // document's time origin, and its content precision reduction.
+  void SetEventClockPort(double (*now)(void*, double clock_ms), double (*reduce)(void*, double),
+                         void* context);
   // The Scheduling owner's microtask checkpoint. HTML "clean up after running
   // script": a listener invoked with an empty JavaScript execution context
   // stack (native dispatch: user input, tasks) is followed by a checkpoint, so

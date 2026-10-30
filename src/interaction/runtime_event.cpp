@@ -79,8 +79,7 @@ bool FireRuntimeEvent(State& state, JS::HandleObject target, const char* interfa
   event->kind = kind;
   event->value.set_composed(composed);
   if (trusted) event->value.mark_trusted();
-  event->value.set_time_stamp(time_ms >= 0 ? time_ms : std::chrono::duration<double, std::milli>(
-      std::chrono::steady_clock::now() - state.started).count());
+  event->value.set_time_stamp(state.EventTime(time_ms));
   Event& entry = *event;
   state.events.push_back(std::move(event));
   PreparedPath path(cx);

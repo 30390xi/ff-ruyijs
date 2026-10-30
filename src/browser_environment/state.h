@@ -105,7 +105,8 @@ struct State final {
   std::shared_ptr<struct WindowLegacyState> legacy;
   // Root scroll content extent (right, bottom) in viewport coordinates, from the
   // Geometry layout of the document element; bound by runtime/geometry_ports.cpp.
-  bool (*scrollExtent)(void*, double* right, double* bottom) = nullptr;
+  // The viewport's scroll range (window.scrollMaxX/Y) from Geometry layout.
+  bool (*scrollExtent)(void*, double* maxX, double* maxY) = nullptr;
   void* scrollExtentContext = nullptr;
   JS::PersistentRooted<JS::GCVector<JSObject*>> instances;
   JS::PersistentRooted<JS::GCVector<JSObject*>> functions;

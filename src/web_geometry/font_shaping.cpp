@@ -140,7 +140,14 @@ bool ShapeFont(const SelectedFont& selected, const FontInput& input,
     result->advances[cluster] += width;
     result->clusters[cluster] = int(cluster);
     const double unit = size / metrics.designUnitsPerEm * 60;
-    {
+    // gfxTextRun::CompressedGlyph::IsSimpleGlyph: one glyph for one character,
+    // no offsets. Without TEXT_NEED_BOUNDING_BOX (OPTIMIZE_SPEED) a simple
+    // glyph only advances; detailed glyphs still bring their tight extents.
+    const bool detailed = positions[i].x_offset || positions[i].y_offset ||
+        (i > 0 && info[i-1].cluster == info[i].cluster) ||
+        (i + 1 < info.size() && info[i+1].cluster == info[i].cluster) ||
+        (i + 1 < info.size() ? info[i+1].cluster : unsigned(text.size())) - info[i].cluster > 1;
+    if (!input.optimizeSpeed || detailed) {
       // gfxFont::MeasureGlyphs with LOOSE_INK_EXTENTS and gfxFont::SetupGlyphExtents:
       // a glyph whose ink starts at or after its origin and stays inside the
       // font's ascent/descent only widens the run horizontally (to the ceil of
@@ -183,7 +190,8 @@ bool ShapeFont(const SelectedFont& selected, const FontInput& input,
       FrameMaxDescent(metrics, double(conv), result->ascent / 60, result->descent / 60,
                       face, double(float(std::round(size * 60.0) / 60.0))) * 60;
   const auto measurement = ruyijs::domain::geometry::ProjectInk(ink, result->advance, 0,
-      result->ascent, frame_descent, input.scale, selected.syntheticItalic, input.x, input.y);
+      result->ascent, result->descent, input.scale, selected.syntheticItalic, input.x, input.y,
+      frame_descent);
   std::copy_n(measurement.box, 4, result->box.begin());
   std::copy_n(measurement.unrounded, 4, result->unrounded.begin());
   return true;

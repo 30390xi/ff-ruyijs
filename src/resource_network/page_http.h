@@ -23,10 +23,14 @@ struct HttpResult {
   bool transferred=false;
   // Windows QPC milliseconds from the existing Necko transport boundaries.
   double requestTick=0,responseTick=0,headersTick=0;
+  // Connection establishment of the final hop (0: a reused connection):
+  // DNS lookup start/end, TCP connect start, TLS start, connect end (after TLS).
+  double dnsStartTick=0,dnsEndTick=0,connectStartTick=0,secureTick=0,connectEndTick=0;
 };
 struct HttpTimingHop {
   std::string url;HeaderPairs headers;double start=0,end=0;
   double requestStart=0,responseStart=0,headersStart=0;
+  double domainLookupStart=0,domainLookupEnd=0,connectStart=0,secureStart=0,connectEnd=0;
 };
 // One whole request as PerformHttp received it; the parent runs it unchanged.
 struct Model::RemoteRequest {

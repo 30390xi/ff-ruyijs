@@ -26,6 +26,8 @@ bool Text(State& s, const SvgInput& input, float scale, svg::SvgTextMeasurement*
   font.language = input.style.Get("-x-lang");
   if (font.language == "-x-none") font.language.clear();
   font.scale = scale;
+  // The text frame's style font size, before SVGTextFrame's size scale factor.
+  font.optimizeSpeed = TextRunOptimizeSpeed(input.style.Get("text-rendering"), font.size);
   font.transform = input.transform;
   font.x = SvgLength(input, "x", input.viewportWidth) + SvgLength(input, "dx", input.viewportWidth);
   font.y = SvgLength(input, "y", input.viewportHeight) + SvgLength(input, "dy", input.viewportHeight);

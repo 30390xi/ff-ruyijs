@@ -2,6 +2,7 @@
 #include "execution_scheduling/resource_timing.h"
 #include "execution_scheduling/navigation_timing.h"
 #include "execution_scheduling/performance_observer.h"
+#include "execution_scheduling/timer_precision.h"
 #include "js/Array.h"
 #include "js/CharacterEncoding.h"
 #include <cmath>
@@ -25,25 +26,37 @@ const NavigationTiming* NavigationRecord(JSContext* cx,JS::HandleObject entry){
  return PerfNavigationRecord(&owner.toObject());
 }
 // The inherited PerformanceResourceTiming members of the navigation entry, in
-// kPerfSchema[Resource] order. Only measured values are reported; DNS/connect/
-// TLS stay 0 because the transport exports no per-hop measurement and a value
-// must never be copied from fetchStart (runtime/resource_timing_ports.cpp).
+// kPerfSchema[Resource] order. The transport measures no DNS/connect/TLS phase;
+// Firefox reads such a null channel timestamp as fetchStart
+// (PerformanceTimingData::TimeStampToReducedDOMHighResOrFetchStart), and
+// secureConnectionStart as 0 for a document that did not use TLS.
 bool NavigationResource(JSContext* cx,const NavigationTiming& r,unsigned field,JS::MutableHandleValue out){
+ const bool loaded=r.load_event_start>0;
+ const double fetch=r.fetch_start.value_or(r.request_start);
  switch(field){
+  case 7: out.setDouble(r.establishment?r.dns_start:fetch);return true;      // domainLookupStart
+  case 8: out.setDouble(r.establishment?r.dns_end:fetch);return true;        // domainLookupEnd
+  case 9: out.setDouble(r.establishment?r.connect_start:fetch);return true;  // connectStart
+  case 10: out.setDouble(r.establishment?r.connect_end:fetch);return true;   // connectEnd
+  case 11: out.setDouble(r.establishment?r.secure_start:                     // secureConnectionStart
+                         r.name.rfind("https:",0)==0?fetch:0);return true;
+  case 13: out.setDouble(r.response_start);return true;  // finalResponseHeadersStart (no 1xx)
   case 0: return String(cx,"navigation",out);                 // initiatorType
-  case 1: return String(cx,r.protocol,out);                    // nextHopProtocol
-  case 5: out.setDouble(r.fetch_start.value_or(r.request_start));return true;
-  case 11: out.setDouble(r.request_start);return true;
-  case 14: out.setDouble(r.response_start);return true;
-  case 15: out.setDouble(r.response_end);return true;
-  case 16: out.setDouble(r.transfer_size?double(*r.transfer_size):r.encoded_size?double(r.encoded_size+300):0);return true;
-  case 17: out.setDouble(double(r.encoded_size));return true;
-  case 18: out.setDouble(double(r.decoded_size));return true;
-  case 19: out.setInt32(r.status);return true;
-  case 20: return String(cx,r.content_type,out);
-  case 21:{JS::RootedObject list(cx,JS::NewArrayObject(cx,0));
+  case 1: return String(cx,"",out);                            // deliveryType
+  case 2: return String(cx,r.protocol,out);                    // nextHopProtocol
+  case 6: out.setDouble(r.fetch_start.value_or(r.request_start));return true;
+  case 12: out.setDouble(r.request_start);return true;
+  case 15: out.setDouble(r.response_start);return true;
+  case 16: out.setDouble(r.response_end);return true;
+  // The sizes are filled in when the document load completes
+  // (PerformanceMainThread::UpdateNavigationTimingEntry); 0 until then.
+  case 17: out.setDouble(!loaded?0:r.transfer_size?double(*r.transfer_size):r.encoded_size?double(r.encoded_size+300):0);return true;
+  case 18: out.setDouble(loaded?double(r.encoded_size):0);return true;
+  case 19: out.setDouble(loaded?double(r.decoded_size):0);return true;
+  case 20: out.setInt32(r.status);return true;
+  case 21: return String(cx,r.content_type,out);
+  case 22:{JS::RootedObject list(cx,JS::NewArrayObject(cx,0));
    if(!list||!JS_FreezeObject(cx,list))return false;out.setObject(*list);return true;}
-  case 22: return String(cx,"",out);
   default: out.setDouble(0);return true;
  }
 }
@@ -78,16 +91,20 @@ bool Realm::RecordResource(JS::HandleObject page,const ResourceTimingRecord& rec
  JS::RootedObject data(cx,JS::NewArrayObject(cx,23)),server(cx,JS::NewArrayObject(cx,0)),entry(cx);
  JS::RootedString name(cx,JS_NewStringCopyUTF8N(cx,JS::UTF8Chars(record.name.data(),record.name.size())));
  if(!data||!server||!name||!JS_FreezeObject(cx,server)||!Text(cx,data,0,record.initiator)||
-    !Text(cx,data,1,record.protocol)||!Text(cx,data,20,record.contentType)||
-    !Text(cx,data,22,record.deliveryType)||!JS_SetElement(cx,data,21,server))return false;
- const double numbers[]={record.workerStart,record.redirectStart,record.redirectEnd,record.fetchStart,
-  record.domainLookupStart,record.domainLookupEnd,record.connectStart,record.connectEnd,
-  record.secureConnectionStart,record.requestStart,record.finalResponseHeadersStart,
-  record.firstInterimResponseStart,record.responseStart,record.responseEnd,double(record.transferSize),
+    !Text(cx,data,1,record.deliveryType)||!Text(cx,data,2,record.protocol)||
+    !Text(cx,data,21,record.contentType)||!JS_SetElement(cx,data,22,server))return false;
+ // PerformanceTimingData: every recorded time through the document's clamp
+ // (an unrecorded one stays 0); the sizes and status are not times.
+ const auto t=[&](double v){return v==0?0.0:PerfReduce(owner,v);};
+ const double start=t(record.start),end=t(record.responseEnd);
+ const double numbers[]={t(record.workerStart),t(record.redirectStart),t(record.redirectEnd),t(record.fetchStart),
+  t(record.domainLookupStart),t(record.domainLookupEnd),t(record.connectStart),t(record.connectEnd),
+  t(record.secureConnectionStart),t(record.requestStart),t(record.finalResponseHeadersStart),
+  t(record.firstInterimResponseStart),t(record.responseStart),end,double(record.transferSize),
   double(record.encodedBodySize),double(record.decodedBodySize),double(record.responseStatus)};
- for(unsigned i=0;i<18;++i)if(!JS_SetElement(cx,data,i+2,numbers[i]))return false;
+ for(unsigned i=0;i<18;++i)if(!JS_SetElement(cx,data,i+3,numbers[i]))return false;
  JS::RootedValue detail(cx,JS::ObjectValue(*data));
- return PerfEntry(cx,owner,Resource,name,record.start,record.responseEnd-record.start,detail,nullptr,&entry)&&
+ return PerfEntry(cx,owner,Resource,name,start,end-start,detail,nullptr,&entry)&&
    PerfRecord(cx,owner,entry);
 }
 // This document's navigation (docs/owners/NAVIGATION_TIMING.md). The record is
@@ -104,11 +121,16 @@ bool Realm::RecordNavigation(JS::HandleObject page,const NavigationTiming& timin
  // document never reads the next document's values.
  std::unique_ptr<NavigationTiming> stored(new (std::nothrow) NavigationTiming(timing));
  if(!stored)return Error(cx,"Navigation timing allocation failed");
- // Firefox reduces timer precision to 1 ms outside cross-origin isolation, so
- // the origin and every offset are whole milliseconds.
- stored->time_origin=std::floor(stored->time_origin);
+ // Firefox reduces timer precision to 1 ms outside cross-origin isolation:
+ // the origin is an absolute time (no mix-in), the offsets are relative to it
+ // and use the document's timeline seed. A never-reached time stays 0.
+ const bool logical=s.model.Clock().logical;
+ stored->time_origin=logical?std::floor(stored->time_origin):ReduceContentTime(stored->time_origin,0);
  for(double* field:{&stored->request_start,&stored->response_start,&stored->response_end})
-  *field=std::floor(*field);
+  if(*field!=0)*field=PerfReduce(owner,*field);
+ if(stored->fetch_start&&*stored->fetch_start!=0)stored->fetch_start=PerfReduce(owner,*stored->fetch_start);
+ for(double* field:{&stored->dns_start,&stored->dns_end,&stored->connect_start,&stored->connect_end,&stored->secure_start})
+  if(*field!=0)*field=PerfReduce(owner,*field);
  size_t replayIndex=0;
  if(!s.ApplyNavigationReplay(*stored,&replayIndex))return false;
  auto* previous=PerfNavigationRecord(owner);
@@ -136,7 +158,7 @@ bool Realm::MarkNavigation(JS::HandleObject page,int milestone){
  if(!record)return true;
  s.SyncClock();
  const auto clock=s.model.Inspect();
- const double offset=std::floor(clock.epoch+clock.now-record->time_origin);
+ const double offset=PerfReduce(owner,clock.epoch+clock.now-record->time_origin);
  switch(milestone) {
   case 0: record->dom_interactive=offset;break;
   case 1: record->dom_content_loaded_start=offset;break;
@@ -158,6 +180,16 @@ double Realm::DocumentNow(JS::HandleObject page){
  JSObject* raw=PerformanceOwner(page);if(!raw)return std::nan("");
  JS::RootedObject owner(state_->cx,raw);const auto snapshot=state_->model.Inspect();
  return snapshot.epoch+snapshot.now-PerfTimeOrigin(owner);
+}
+double Realm::OriginRelative(JS::HandleObject page,double clockMs){
+ JSObject* raw=PerformanceOwner(page);if(!raw)return std::nan("");
+ JS::RootedObject owner(state_->cx,raw);
+ if(clockMs<0){state_->SyncClock();clockMs=state_->model.Inspect().now;}
+ return state_->model.Inspect().epoch+clockMs-PerfTimeOrigin(owner);
+}
+double Realm::ReduceRelative(JS::HandleObject page,double ms){
+ JSObject* owner=PerformanceOwner(page);
+ return owner?PerfReduce(owner,ms):ms;
 }
 JSObject* Realm::PerformanceOwner(JS::HandleObject page){
  auto& s=*state_;

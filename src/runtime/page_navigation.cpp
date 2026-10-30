@@ -25,7 +25,13 @@
 #include "js/Object.h"
 #include "js/Realm.h"
 #include "js/String.h"
+#include <algorithm>
 #include <cctype>
+#include <random>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 
 namespace ruyijs {
 namespace {
@@ -45,6 +51,23 @@ std::string Committed(const std::string& url, const resource_network::HttpResult
 double Epoch(execution_scheduling::Realm& scheduling) {
   const auto snapshot = scheduling.Inspect();
   return snapshot.epoch + snapshot.now;
+}
+// Windows QPC milliseconds, the clock the Necko boundary ticks
+// (HttpResult::requestTick/responseTick/headersTick) are on.
+double QpcMilliseconds() {
+  LARGE_INTEGER counter{}, frequency{};
+  QueryPerformanceCounter(&counter);
+  QueryPerformanceFrequency(&frequency);
+  return double(counter.QuadPart) * 1000 / double(frequency.QuadPart);
+}
+// Firefox 159 (measured headed and headless, cold and warm): a browser-
+// initiated load opens its DocumentChannel in the parent process before the
+// content process stamps navigationStart, 2-6 ms later; a navigation a page
+// starts has fetchStart == navigationStart. ruyijs has no process hop, so the
+// browser-initiated gap is drawn from that range (never past requestStart).
+double BrowserNavigationGap() {
+  static thread_local std::mt19937 random{std::random_device{}()};
+  return std::uniform_real_distribution<double>(2.0, 6.0)(random);
 }
 // One task created in the current realm, so it is dropped with the document
 // that queued it if that document is retired first.
@@ -130,12 +153,30 @@ bool PageLoad::Navigate(const std::string& url, bool replace, const std::string&
   // navigation start, then the request and response instants the transport
   // records. Firefox measures the same way (the navigation entry is completed
   // when the response ends, before commit).
-  pending->origin = Epoch(scheduling_);
-  pending->request_start = pending->origin;
+  // fetchStart is when the request is opened; requestStart and responseStart
+  // are Necko's own boundaries (QPC ticks of the final hop) on the same clock.
+  const double fetch = Epoch(scheduling_), qpc = QpcMilliseconds();
   resource_network::PerformHttp(network, method, url, headers, requestBody, &pending->http,
                                 resource_network::RedirectMode::Follow, options);
-  pending->response_end = Epoch(scheduling_);
-  pending->response_start = pending->response_end;
+  const double end = Epoch(scheduling_);
+  const auto at = [&](double tick) {
+    return tick > 0 ? std::clamp(fetch + tick - qpc, fetch, end) : 0.0;
+  };
+  pending->fetch_start = fetch;
+  pending->dns_start = at(pending->http.dnsStartTick);
+  pending->dns_end = at(pending->http.dnsEndTick);
+  pending->connect_start = at(pending->http.connectStartTick);
+  pending->secure_start = at(pending->http.secureTick);
+  pending->connect_end = at(pending->http.connectEndTick);
+  pending->request_start = at(pending->http.requestTick);
+  if (pending->request_start == 0) pending->request_start = fetch;
+  pending->response_start = at(pending->http.responseTick);
+  if (pending->response_start == 0) pending->response_start = at(pending->http.headersTick);
+  if (pending->response_start == 0) pending->response_start = end;
+  pending->response_end = end;
+  pending->origin = browserInitiated
+      ? fetch + std::min(BrowserNavigationGap(), pending->request_start - fetch)
+      : fetch;
   pending->redirects = uint16_t(pending->http.redirected ? 1 : 0);
   pending_ = std::move(pending);
   // The host `navigate` action commits here, on the calling stack; an in-page
@@ -199,7 +240,19 @@ bool PageLoad::Commit(uint64_t ticket) {
   execution_scheduling::NavigationTiming timing;
   timing.present = true;
   timing.time_origin = response->origin;
-  // Offsets from this document's own navigation start.
+  // Offsets from this document's own navigation start (fetchStart may precede it).
+  timing.fetch_start = response->fetch_start - response->origin;
+  {
+    // Measured establishment of a new connection; a reused one has none and
+    // each falls back to the phase before it (fetchStart first), as Firefox.
+    const auto rel = [&](double v, double fallback) { return v > 0 ? v - response->origin : fallback; };
+    timing.dns_start = rel(response->dns_start, *timing.fetch_start);
+    timing.dns_end = rel(response->dns_end, timing.dns_start);
+    timing.connect_start = rel(response->connect_start, timing.dns_end);
+    timing.connect_end = rel(response->connect_end, timing.connect_start);
+    timing.secure_start = committed.rfind("https:", 0) == 0 ? rel(response->secure_start, timing.connect_end) : 0;
+    timing.establishment = true;
+  }
   timing.request_start = response->request_start - response->origin;
   timing.response_start = response->response_start - response->origin;
   timing.response_end = response->response_end - response->origin;

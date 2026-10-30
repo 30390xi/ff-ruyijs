@@ -20,6 +20,7 @@ struct LayoutCache {
   std::array<double,4> viewport{};
   std::vector<box::BoxNode> nodes;
   std::vector<box::BoxLayout> layout;
+  box::BoxScrollport scrollport;  // The viewport scroll frame of this layout.
   std::vector<document_model::NodeKey> keys;  // Per node, in layout order.
   std::vector<std::u16string> inline_styles;  // Per node: its style attribute (empty if none).
   std::vector<uint64_t> attributes;  // Per node: hash of its other attributes.

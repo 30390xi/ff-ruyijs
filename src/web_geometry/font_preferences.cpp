@@ -3,6 +3,9 @@
 #include "web_geometry/font_config.h"
 #include <algorithm>
 #include <cstring>
+#include <atomic>
+#include <cctype>
+#include <cmath>
 #include <mutex>
 #pragma comment(lib, "user32.lib")  // SystemParametersInfoW (system-ui menu font)
 
@@ -65,6 +68,20 @@ std::wstring MenuFont() {
   if (!SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0)) return {};
   return metrics.lfMenuFont.lfFaceName;
 }
+}
+namespace {
+std::atomic<double> g_device_pixel_ratio{1.0};
+}
+void SetDevicePixelRatio(double ratio) {
+  if (std::isfinite(ratio) && ratio > 0) g_device_pixel_ratio = ratio;
+}
+bool TextRunOptimizeSpeed(const std::string& value, double cssFontSize) {
+  std::string textRendering = value;
+  for (auto& ch : textRendering) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+  if (textRendering == "optimizespeed") return true;
+  if (!textRendering.empty() && textRendering != "auto") return false;
+  // nsPresContext::DevPixelsToFloatCSSPixels(auto_quality_min_font_size = 20).
+  return cssFontSize < float(20.0 / g_device_pixel_ratio.load());
 }
 void SetBrowserLanguage(const std::string& language) {
   std::lock_guard<std::mutex> guard(g_language_lock);
@@ -197,6 +214,65 @@ std::vector<std::wstring> PrefFallbackFamilies(uint32_t ch, const FontInput& inp
     Split(Pref("font.name-list." + generic + "." + lang), &result);
   }
   return result;
+}
+std::vector<std::wstring> CommonFallbackFamilies(uint32_t ch) {
+  std::vector<std::wstring> list;
+  const hb_script_t script = hb_unicode_script(hb_unicode_funcs_get_default(), ch);
+  auto add = [&](std::initializer_list<const wchar_t*> names) { for (auto* n : names) list.push_back(n); };
+  switch (script) {
+    case HB_SCRIPT_HAN: case HB_SCRIPT_BOPOMOFO:
+      add({L"SimSun"}); if (ch > 0xFFFF) add({L"SimSun-ExtB"}); break;
+    case HB_SCRIPT_HIRAGANA: case HB_SCRIPT_KATAKANA: add({L"Yu Gothic", L"MS PGothic"}); break;
+    case HB_SCRIPT_HANGUL: add({L"Malgun Gothic"}); break;
+    case HB_SCRIPT_YI: add({L"Microsoft Yi Baiti"}); break;
+    case HB_SCRIPT_MONGOLIAN: add({L"Mongolian Baiti"}); break;
+    case HB_SCRIPT_TIBETAN: add({L"Microsoft Himalaya"}); break;
+    case HB_SCRIPT_PHAGS_PA: add({L"Microsoft PhagsPa"}); break;
+    case HB_SCRIPT_SYRIAC: add({L"Estrangelo Edessa"}); break;
+    case HB_SCRIPT_THAANA: add({L"MV Boli"}); break;
+    case HB_SCRIPT_BENGALI: add({L"Vrinda", L"Nirmala UI"}); break;
+    case HB_SCRIPT_DEVANAGARI: add({L"Kokila", L"Nirmala UI"}); break;
+    case HB_SCRIPT_GUJARATI: add({L"Shruti", L"Nirmala UI"}); break;
+    case HB_SCRIPT_GURMUKHI: add({L"Raavi", L"Nirmala UI"}); break;
+    case HB_SCRIPT_KANNADA: add({L"Tunga", L"Nirmala UI"}); break;
+    case HB_SCRIPT_MALAYALAM: add({L"Kartika", L"Nirmala UI"}); break;
+    case HB_SCRIPT_ORIYA: add({L"Kalinga", L"Nirmala UI"}); break;
+    case HB_SCRIPT_TAMIL: add({L"Latha", L"Nirmala UI"}); break;
+    case HB_SCRIPT_TELUGU: add({L"Gautami", L"Nirmala UI"}); break;
+    case HB_SCRIPT_SINHALA: add({L"Iskoola Pota", L"Nirmala UI"}); break;
+    case HB_SCRIPT_CHAKMA: case HB_SCRIPT_MEETEI_MAYEK: case HB_SCRIPT_OL_CHIKI:
+    case HB_SCRIPT_SORA_SOMPENG: add({L"Nirmala UI"}); break;
+    case HB_SCRIPT_MYANMAR: add({L"Myanmar Text"}); break;
+    case HB_SCRIPT_KHMER: add({L"Khmer UI"}); break;
+    case HB_SCRIPT_LAO: add({L"Lao UI"}); break;
+    case HB_SCRIPT_THAI: add({L"Tahoma", L"Leelawadee UI"}); break;
+    case HB_SCRIPT_TAI_LE: add({L"Microsoft Tai Le"}); break;
+    case HB_SCRIPT_BUGINESE: add({L"Leelawadee UI"}); break;
+    case HB_SCRIPT_NEW_TAI_LUE: add({L"Microsoft New Tai Lue"}); break;
+    case HB_SCRIPT_JAVANESE: add({L"Javanese Text"}); break;
+    case HB_SCRIPT_GEORGIAN: case HB_SCRIPT_LISU: add({L"Segoe UI"}); break;
+    case HB_SCRIPT_ETHIOPIC: add({L"Nyala", L"Ebrima"}); break;
+    case HB_SCRIPT_ADLAM: case HB_SCRIPT_NKO: case HB_SCRIPT_OSMANYA: case HB_SCRIPT_TIFINAGH:
+    case HB_SCRIPT_VAI: add({L"Ebrima"}); break;
+    case HB_SCRIPT_CANADIAN_SYLLABICS: add({L"Euphemia"}); break;
+    case HB_SCRIPT_CHEROKEE: case HB_SCRIPT_OSAGE: add({L"Gadugi"}); break;
+    case HB_SCRIPT_BRAILLE: case HB_SCRIPT_DESERET: add({L"Segoe UI Symbol"}); break;
+    default: break;
+  }
+  // Arial is the default system fallback; symbols and punctuation also try
+  // the Segoe UI families and Cambria Math.
+  add({L"Arial"});
+  const uint32_t block = ch >> 8;
+  const auto category = hb_unicode_general_category(hb_unicode_funcs_get_default(), ch);
+  const bool symbol = category >= HB_UNICODE_GENERAL_CATEGORY_CURRENCY_SYMBOL &&
+                      category <= HB_UNICODE_GENERAL_CATEGORY_OTHER_SYMBOL;
+  const bool punctuation = category >= HB_UNICODE_GENERAL_CATEGORY_CONNECT_PUNCTUATION &&
+                           category <= HB_UNICODE_GENERAL_CATEGORY_OPEN_PUNCTUATION;
+  if (script == HB_SCRIPT_COMMON || (block >= 0x20 && block <= 0x2b) || block == 0x2e ||
+      symbol || punctuation)
+    add({L"Segoe UI", L"Segoe UI Symbol", L"Cambria Math"});
+  add({L"Arial Unicode MS", L"Segoe UI Emoji", L"Twemoji Mozilla"});
+  return list;
 }
 std::vector<std::wstring> EmojiFallbackFamilies() {
   std::vector<std::wstring> result;

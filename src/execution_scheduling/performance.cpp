@@ -5,6 +5,7 @@
 #include "jsfriendapi.h"
 #include "interaction/realm.h"
 #include "execution_scheduling/navigation_timing.h"
+#include "execution_scheduling/timer_precision.h"
 namespace ruyijs::execution_scheduling {
 namespace {
 void Finalize(JS::GCContext*,JSObject* object) {
@@ -32,6 +33,9 @@ bool InstallPerformance(State& s,JS::HandleObject target,PageHelpers& helpers,in
  JS::SetReservedSlot(owner,PPage,JS::ObjectValue(*target));
  JS::SetReservedSlot(owner,PHandler,JS::NullValue());
  JS::SetReservedSlot(owner,PNavTiming,JS::UndefinedValue());
+ {const uint64_t seed=uint64_t(NewTimelineSeed());
+  JS::SetReservedSlot(owner,PSeedLow,JS::Int32Value(int32_t(uint32_t(seed))));
+  JS::SetReservedSlot(owner,PSeedHigh,JS::Int32Value(int32_t(uint32_t(seed>>32))));}
  map=JS::NewMapObject(cx);JS::RootedValue exception(cx);
  if(!map||!JS_GetProperty(cx,target,"DOMException",&exception))return false;
  JS::SetReservedSlot(owner,PEntries,JS::ObjectValue(*map));JS::SetReservedSlot(owner,PException,exception);

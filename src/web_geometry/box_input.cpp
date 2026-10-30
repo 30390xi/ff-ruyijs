@@ -303,7 +303,7 @@ bool LayoutFor(State& s, JS::HandleObject element, std::shared_ptr<const LayoutC
     if(!Visit(s,root,target,size_t(-1),pass,0,false,size_t(-1),0)) return false;
   }
   const size_t found=pass.found;
-  if(!box::ComputeBoxLayout(cache->nodes,viewport,&cache->layout))
+  if(!box::ComputeBoxLayout(cache->nodes,viewport,&cache->layout,&cache->scrollport))
     return WebKit::Fail(s.cx,"Element box layout budget exceeded");
   // One cascade scope only: a shadow scope's sheets are outside the fingerprint.
   if(stamped&&styles->Scopes()<=1) {

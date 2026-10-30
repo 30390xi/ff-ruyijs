@@ -42,14 +42,27 @@ void OffsetFrom(const LayoutCache& cache, size_t index, document_model::OffsetGe
   const bool replaced = node.tag == "iframe" || node.tag == "img" || node.tag == "canvas" ||
                         node.tag == "video" || node.tag == "object" || node.tag == "embed";
   if (replaced || node.style.Get("display") != "inline") {
-    out->client_width = std::max(0.0, box.border[2] - box.edge[1] - box.edge[3]);
-    out->client_height = std::max(0.0, box.border[3] - box.edge[0] - box.edge[2]);
+    // The padding box less the scrollbars (nsIFrame::GetPaddingRect less the
+    // scrollbar gutter), and the left/top border widths.
+    out->client_left = box.edge[3]; out->client_top = box.edge[0];
+    out->scroller = box::BoxScrollContainer(cache.nodes, index);
+    out->client_width = std::max(0.0, box.border[2] - box.edge[1] - box.edge[3] - box.scrollbar[0]);
+    out->client_height = std::max(0.0, box.border[3] - box.edge[0] - box.edge[2] - box.scrollbar[1]);
     // Content overflow is inflated by the end padding (Firefox 158).
     const double left = box.border[0] + box.edge[3], top = box.border[1] + box.edge[0];
     double right = left + out->client_width - box.padding[1], bottom = top + out->client_height - box.padding[2];
     Extent(cache, index, 0, &right, &bottom);
     out->scroll_width = std::max(out->client_width, right + box.padding[1] - left);
     out->scroll_height = std::max(out->client_height, bottom + box.padding[2] - top);
+  }
+  if (out->root) {
+    // The root element's client and scroll sizes are the viewport scroll
+    // frame's: the scrollport and the scrollable overflow.
+    out->client_left = out->client_top = 0;
+    out->client_width = cache.scrollport.client_width;
+    out->client_height = cache.scrollport.client_height;
+    out->scroll_width = cache.scrollport.scroll_width;
+    out->scroll_height = cache.scrollport.scroll_height;
   }
   if (node.tag == "body") return;
   out->left = box.border[0]; out->top = box.border[1];
