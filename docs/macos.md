@@ -4,6 +4,12 @@ This is the maintainer path for the macOS shell. Windows x64 still installs from
 
 The same facts are written in [macos.zh-CN.md](macos.zh-CN.md).
 
+## Branches
+
+`main` on the macOS maintainer line is this macOS branch. `release/macos` is the release branch. A fix lands on `release/macos` first, and `main` fast-forwards to that same commit. After each accepted fix the two branches match.
+
+The upstream repository stays on the fetch-only `upstream` remote. Cut the update branch from `release/macos`, merge upstream there, review it, and merge it back into `release/macos`. Do not merge upstream into `main` directly.
+
 ## What lives where
 
 ruyijs on macOS is the outer shell. SpiderMonkey and Necko/NSS come from one official Firefox tree, built outside this repository and never committed here.
@@ -172,7 +178,7 @@ The shell stays linked for `macosx_26_0_arm64`. Linux, Intel Macs, and macOS old
 2. TLS profiles. `Context(tls=)` is the upstream argument and is copied to the child as `NECKO_FIREFOX`. This xpcshell does not read that variable, so there is no second ClientHello table. Stop there. Do not add a JA3 switch.
 3. C client install name is done. `otool -D` prints `@rpath/libruyijs_client.dylib`, and the rpath is `@executable_path`.
 4. Image pixels. Keep ImageIO. A fixture can record the GIF background difference. Change pixels only when ImageIO already exposes the matching disposal.
-5. Font aliases. `Osaka-Mono` to `Osaka` is the only Mac alias. Mac family selection stays the Core Text cascade. The upstream pref-lang, SimSun, and Arial lists stay on the Windows side of `font_collection.cpp`.
+5. Font aliases. `Osaka-Mono` to `Osaka` is the only Mac alias. Mac family selection stays the Core Text cascade. The upstream pref-lang, SimSun, and Arial lists stay on the Windows side of `font_collection.cpp`. The Windows cache separator stays the source escape `'\0'`, so the file stays text.
 6. Publish. Leave `runtime.json` `macos.url` empty. The zip recorded there is the previous shell, not 0.2.1, and this round does not rebuild the wheel or the zip. COLRv1, Linux, Intel Macs, and macOS older than 26 stay out.
 
 ## What not to commit

@@ -268,7 +268,7 @@ bool FontCollection::Select(const FontInput& input, uint32_t codepoint, Selected
     config_generation = generation;
     selected.clear(); families.clear(); fallbacks.clear();
   }
-  const std::string familyKey = input.family + '' + input.language;
+  const std::string familyKey = input.family + '\0' + input.language;
   auto memo = families.find(familyKey);
   if (memo == families.end()) {
     if (families.size() >= 256) families.clear();
