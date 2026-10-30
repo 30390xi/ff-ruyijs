@@ -16,6 +16,12 @@ struct NavigationTiming {
   // for a reused connection); secure_start is 0 without TLS.
   double dns_start = 0, dns_end = 0, connect_start = 0, connect_end = 0, secure_start = 0;
   bool establishment = false;  // set by a measured navigation
+  // CacheablePerformanceTimingData::CheckTimingAllowedForOrigin and
+  // CheckBodyInfoAccessAllowedForOrigin: a top-level document load passes
+  // both; a frame document is checked against its parent's origin (the
+  // loading principal): same origin, or Timing-Allow-Origin for timing. A
+  // navigation has no CORS, so a cross-origin frame never gets body info.
+  bool timing_allowed = true, body_allowed = true;
   double response_start = 0;
   double response_end = 0;
   double dom_interactive = 0;

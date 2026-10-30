@@ -20,11 +20,11 @@ bool State::ApplyWorkerProfile(std::string_view profile) {
   if (!ImportWorkerGroups(object) || !ApplyWorkerContext(object)) return false;
   std::vector<Change> changes;
   if (!Profile(cx, object, false, &changes)) return false;
-  size_t expected = 1;  // The original locale.timezone field.
+  size_t expected = std::size(kLocaleFields);  // locale.timezone and locale.osLocale.
   for (const auto& field : kNavigatorFields) expected += field.worker;
   if (changes.size() != expected) return Error(cx, "Worker environment is incomplete");
   for (const auto& change : changes) {
-    if (change.kind == Kind::Locale && change.field == 0) continue;
+    if (change.kind == Kind::Locale) continue;
     if (change.kind != Kind::Navigator || change.field >= std::size(kNavigatorFields) ||
         !kNavigatorFields[change.field].worker)
       return Error(cx, "Worker environment has an unexpected field");

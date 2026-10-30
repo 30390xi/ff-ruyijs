@@ -96,6 +96,11 @@ struct State {
   bool (*capturePort)(void*, JS::HandleObject, JS::MutableHandleObject) = nullptr;
   void* capturePortContext = nullptr;
   bool (*elementCheck)(void*, JS::HandleObject, bool*) = nullptr;
+  // The inherited content language of a canvas element (its own or an
+  // ancestor's lang/xml:lang), or of the document's root element when
+  // `element` is null; "" when none. Unbound in a worker.
+  bool (*langPort)(void*, JS::HandleObject element, std::string* lang) = nullptr;
+  void* langPortContext = nullptr;
   void* elementCheckContext = nullptr;
   bool (*matrixFactory)(void*, const double*, JS::MutableHandleObject) = nullptr;
   void* matrixFactoryContext = nullptr;
@@ -180,7 +185,11 @@ JSObject* NewContext2D(State& state, JS::HandleObject canvas, JS::MutableHandleO
 bool InstallContext2DState(State&, WebFace&);
 bool InstallContext2DPath(State&, WebFace&);
 bool InstallContext2DFill(State&, WebFace&);
-bool FillCanvasText(State&, JS::HandleObject, const std::u16string&, double, double, double);
+// |into| (optional) draws into that premultiplied RGBA surface instead of the
+// canvas, source-over and shifted by (dx, dy): AdjustedTargetForShadow's temp.
+struct TextTarget { uint8_t* pixels; int width, height; int dx, dy; };
+bool FillCanvasText(State&, JS::HandleObject, const std::u16string&, double, double, double,
+                    const TextTarget* into = nullptr);
 // context2d_image.cpp: createImageData/getImageData/putImageData.
 bool InstallImageMethods(State&, WebFace&);
 bool Context2DCanvas(JSContext*, unsigned, JS::Value*);

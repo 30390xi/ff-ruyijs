@@ -9,18 +9,54 @@
 
 namespace ruyijs::domain::styling {
 namespace {
-// Preferred order: the shorthand with the most longhands first.
+// Preferred order: the shorthand with the most longhands first (Servo
+// PropertyDeclarationBlock::to_css): border (17), border-image (5), the four-
+// side border-width/style/color (4), then the per-side border-top... (3).
 constexpr const char* kShorthands[] = {
-  "font", "border", "border-top", "border-right", "border-bottom", "border-left",
-  "border-width", "border-style", "border-color", "margin", "padding", "inset",
+  "font", "border", "border-image", "border-width", "border-style", "border-color",
+  "border-top", "border-right", "border-bottom", "border-left", "margin", "padding", "inset",
   "flex", "flex-flow", "gap", "overflow"};
+constexpr const char* kBorderImage[] = {"border-image-source", "border-image-slice",
+                                        "border-image-width", "border-image-outset",
+                                        "border-image-repeat"};
+// shorthands.rs border_image::to_css: the non-initial components, the source
+// alone when every component is initial.
+std::string BorderImage(const std::vector<CssDeclarationValue>& rows, bool* important) {
+  std::string values[5];
+  bool flag = false;
+  for (size_t i = 0; i < 5; ++i) {
+    auto entry = std::find_if(rows.begin(), rows.end(), [&](const auto& r) { return r.name == kBorderImage[i]; });
+    if (entry == rows.end() || (i && entry->important != flag)) return {};
+    flag = entry->important; values[i] = entry->value;
+  }
+  constexpr const char* initial[] = {"none", "100%", "1", "0", "stretch"};
+  bool has[5], any = false;
+  for (size_t i = 0; i < 5; ++i) { has[i] = values[i] != initial[i]; any = any || has[i]; }
+  if (important) *important = flag;
+  std::string out;
+  if (has[0] || !any) { out = values[0]; if (!any) return out; }
+  const bool slice = has[1] || has[2] || has[3];
+  if (slice) {
+    if (has[0]) out += ' ';
+    out += values[1];
+    if (has[2] || has[3]) {
+      out += " /";
+      if (has[2]) out += " " + values[2];
+      if (has[3]) out += " / " + values[3];
+    }
+  }
+  if (has[4]) { if (has[0] || slice) out += ' '; out += values[4]; }
+  return out;
+}
 std::vector<std::string> Longhands(std::string_view shorthand) {
+  if (shorthand == "border-image") return {std::begin(kBorderImage), std::end(kBorderImage)};
   if (shorthand != "font") return CssBoxLonghands(shorthand);
   std::vector<std::string> names;
   for (const auto& row : CssFontDefaults()) names.push_back(row.name);
   return names;
 }
 std::string Shorthand(const std::vector<CssDeclarationValue>& rows, std::string_view name, bool* important) {
+  if (name == "border-image") return BorderImage(rows, important);
   return name == "font" ? CssFontSerialize(rows, important) : CssBoxSerialize(rows, std::string(name), important);
 }
 }  // namespace

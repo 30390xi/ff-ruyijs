@@ -1,6 +1,9 @@
 #include "web_geometry/svg.h"
 #include "web_geometry/system_font.h"
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
+#include <cstring>
 
 namespace ruyijs::web_geometry {
 namespace {
@@ -14,7 +17,7 @@ bool Read(State& s, JS::HandleObject node, SvgInput* input, JS::MutableHandleObj
   input->transform = SvgTransform(transform);
   return true;
 }
-bool Text(State& s, const SvgInput& input, float scale, svg::SvgTextMeasurement* out) {
+FontInput TextFont(const SvgInput& input, float scale, const svg::SvgMatrix& transform) {
   FontInput font;
   font.family = input.style.Get("font-family");
   font.size = input.style.fontSize;
@@ -28,11 +31,103 @@ bool Text(State& s, const SvgInput& input, float scale, svg::SvgTextMeasurement*
   font.scale = scale;
   // The text frame's style font size, before SVGTextFrame's size scale factor.
   font.optimizeSpeed = TextRunOptimizeSpeed(input.style.Get("text-rendering"), font.size);
-  font.transform = input.transform;
-  font.x = SvgLength(input, "x", input.viewportWidth) + SvgLength(input, "dx", input.viewportWidth);
-  font.y = SvgLength(input, "y", input.viewportHeight) + SvgLength(input, "dy", input.viewportHeight);
-  if (!s.fonts.Measure(input.node.text, font, out))
-    return WebKit::Fail(s.cx, "SVG system-font measurement exceeds supported input or font resources");
+  // letter-spacing: a computed length in px ("normal" is 0).
+  const auto spacing = input.style.Get("letter-spacing");
+  char* end = nullptr;
+  const double value = spacing.empty() || spacing == "normal" ? 0 : std::strtod(spacing.c_str(), &end);
+  if (std::isfinite(value) && (!end || *end == 0 || std::strcmp(end, "px") == 0)) font.letterSpacing = value;
+  font.transform = transform;
+  return font;
+}
+// The laid-out text of one <text> subtree (SVGTextFrame::DoGlyphPositioning):
+// its text nodes and tspan/a children in order on one line, each run in its own
+// element's font. An x/y attribute starts a new position, dx/dy shift it.
+struct TextFlow {
+  State& s;
+  float scale;
+  svg::SvgMatrix transform;
+  double x = 0, y = 0;
+  svg::SvgBounds bounds, transformed;
+  svg::SvgTextMeasurement* out;
+  double length = 0;
+  unsigned depth = 0;
+  bool Run(const SvgInput& input, const std::u16string& text) {
+    if (text.empty()) return true;
+    FontInput font = TextFont(input, scale, transform);
+    font.x = x; font.y = y;
+    svg::SvgTextMeasurement run;
+    if (!s.fonts.Measure(text, font, &run))
+      return WebKit::Fail(s.cx, "SVG system-font measurement exceeds supported input or font resources");
+    if (!run.characters.empty() && run.box[2] + run.box[3] > 0) {
+      bounds.Include(run.box);
+      transformed.Include(run.transformed);
+    }
+    out->characters.insert(out->characters.end(), run.characters.begin(), run.characters.end());
+    x += run.length; length += run.length;
+    return true;
+  }
+  bool Element(const SvgInput& input, JS::HandleObjectVector children) {
+    if (++depth > 64) return WebKit::Fail(s.cx, "SVG text nesting budget exceeded");
+    for (const auto& segment : input.node.segments) {
+      if (segment.child < 0) { if (!Run(input, segment.text)) return false; continue; }
+      if (size_t(segment.child) >= children.length()) continue;
+      JS::RootedObject element(s.cx, children[segment.child]);
+      SvgInput child = input;
+      JS::RootedObject parent(s.cx);
+      JS::RootedObjectVector grandchildren(s.cx);
+      if (!Read(s, element, &child, &parent, &grandchildren)) return false;
+      if (!child.node.connected || child.style.Get("display") == "none" || !child.node.textContent) continue;
+      Position(child);
+      if (!Element(child, grandchildren)) return false;
+    }
+    --depth;
+    return true;
+  }
+  void Position(const SvgInput& input) {
+    if (!SvgAttribute(input, "x").empty()) x = SvgLength(input, "x", input.viewportWidth);
+    if (!SvgAttribute(input, "y").empty()) y = SvgLength(input, "y", input.viewportHeight);
+    x += SvgLength(input, "dx", input.viewportWidth);
+    y += SvgLength(input, "dy", input.viewportHeight);
+  }
+};
+bool Text(State& s, const SvgInput& input, float scale, JS::HandleObjectVector children,
+          svg::SvgTextMeasurement* out) {
+  *out = {};
+  TextFlow flow{s, scale, input.transform};
+  flow.out = out;
+  flow.x = SvgLength(input, "x", input.viewportWidth) + SvgLength(input, "dx", input.viewportWidth);
+  flow.y = SvgLength(input, "y", input.viewportHeight) + SvgLength(input, "dy", input.viewportHeight);
+  if (input.node.segments.empty()) {
+    if (!flow.Run(input, input.node.text)) return false;
+  } else if (!flow.Element(input, children)) return false;
+  out->box = flow.bounds.box;
+  out->transformed = flow.transformed.box;
+  out->length = float(flow.length);
+  // textLength="" with lengthAdjust="spacing" (the default): the difference
+  // from the natural length is spread over the gaps between characters; the
+  // computed text length stays the natural one (SVGTextFrame::DoGlyphPositioning).
+  const auto textLength = SvgAttribute(input, "textLength");
+  if (!textLength.empty() && out->characters.size() > 1) {
+    const double expected = SvgLength(input, "textLength", input.viewportWidth, -1);
+    const auto adjust = SvgAttribute(input, "lengthAdjust");
+    if (expected >= 0 && (adjust.empty() || adjust == "spacing" || adjust == "spacingAndGlyphs")) {
+      const double origin = out->characters.front()[0];
+      if (adjust == "spacingAndGlyphs") {
+        const double factor = out->length > 0 ? expected / out->length : 1;
+        for (auto& box : out->characters) {
+          box[0] = float(origin + (box[0] - origin) * factor); box[2] = float(box[2] * factor);
+        }
+        out->box[0] = float(origin + (out->box[0] - origin) * factor);
+        out->box[2] = float(out->box[2] * factor);
+      } else {
+        const double step = (expected - out->length) / double(out->characters.size() - 1);
+        for (size_t i = 1; i < out->characters.size(); ++i)
+          out->characters[i][0] = float(out->characters[i][0] + step * double(i));
+        out->box[2] = float(std::max(0.0, double(out->box[2]) + step * double(out->characters.size() - 1)));
+      }
+      out->transformed = input.transform.Apply(out->box);
+    }
+  }
   const auto anchor = input.style.Get("text-anchor");
   const float shift = anchor == "middle" ? out->length/2 : anchor == "end" ? out->length : 0;
   out->box[0] -= shift;
@@ -54,7 +149,7 @@ bool Visit(State& s, JS::HandleObject element, SvgInput input, const SvgOptions&
     input.viewportHeight = SvgLength(input, "height", input.viewportHeight, input.viewportHeight);
   }
   if (input.node.textContent) {
-    if (!Text(s, input, matrix.Scale(), out)) return false;
+    if (!Text(s, input, matrix.Scale(), children, out)) return false;
     *present = !out->characters.empty();
     return true;
   }

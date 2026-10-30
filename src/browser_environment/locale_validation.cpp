@@ -70,7 +70,8 @@ bool State::ValidateLocale(std::vector<Change>* changes) {
   JS::RootedObject intl(cx, &intlValue.toObject());
   if (!JS_GetProperty(cx, intl, "DateTimeFormat", &constructor)) return false;
   for (auto& change : *changes) {
-    bool locale = change.kind == Kind::Navigator && change.field == 9;
+    // locale.osLocale (the Intl default locale); "" means the host OS locale.
+    bool locale = change.kind == Kind::Locale && change.field == 1 && !change.value.text.empty();
     bool timezone = change.kind == Kind::Locale && change.field == 0;
     if (!locale && !timezone) continue;
     auto& text = change.value.text;
@@ -84,8 +85,8 @@ bool State::ValidateLocale(std::vector<Change>* changes) {
 void State::ApplyLocale(const std::vector<Change>& changes) {
   JS::Realm* realm = JS::GetObjectRealmOrNull(page);
   for (const auto& change : changes) {
-    if (change.kind == Kind::Navigator && change.field == 9)
-      JS::SetRealmLocaleOverride(realm, change.value.text.c_str());
+    if (change.kind == Kind::Locale && change.field == 1)
+      JS::SetRealmLocaleOverride(realm, change.value.text.empty() ? nullptr : change.value.text.c_str());
     if (change.kind == Kind::Locale && change.field == 0)
       JS::SetRealmTimezoneOverride(realm, change.value.text.c_str());
   }

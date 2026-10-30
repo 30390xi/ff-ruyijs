@@ -127,7 +127,8 @@ struct State {
 
 extern const JSClass kStyleViewClass, kSheetClass, kRuleClass, kStyleRuleClass,
     kGroupingRuleClass, kConditionRuleClass, kMediaRuleClass, kSupportsRuleClass, kNestedDeclarationsClass,
-    kKeyframesRuleClass, kKeyframeRuleClass, kPageRuleClass, kSheetListClass, kMediaQueryClass;
+    kKeyframesRuleClass, kKeyframeRuleClass, kPageRuleClass, kSheetListClass, kMediaQueryClass,
+    kLayerBlockRuleClass, kLayerStatementRuleClass, kPropertyRuleClass;
 }  // namespace web_styling
 }  // namespace ruyijs
 #endif

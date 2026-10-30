@@ -142,6 +142,16 @@ bool Read(JSContext* cx, unsigned argc, JS::Value* vp) {
       args.rval().setInt32(int32_t(std::round(size)));
       return true;
     }
+    // Element::ScrollWidth: the root element when <body> scrolls the viewport
+    // (quirks mode) has no scroll frame of its own and reports its frame's
+    // overflow; an element without a frame (display:none, or in a frame
+    // document that is not rendered) reports 0.
+    if (owner.offsetGeometry && !viewport) {
+      const double size = !geometry.present ? 0
+          : field == ScrollWidth ? geometry.own_scroll_width : geometry.own_scroll_height;
+      args.rval().setInt32(int32_t(std::round(size)));
+      return true;
+    }
   }
   if ((field == ClientWidth || field == ClientHeight) && entry->owner->offsetGeometry) {
     // Layout-derived (nsIFrame::GetPaddingRect): the root element reports the

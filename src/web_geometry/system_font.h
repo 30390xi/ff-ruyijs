@@ -18,6 +18,9 @@ struct FontInput {
   // TEXT_NEED_BOUNDING_BOX, so LOOSE_INK_EXTENTS measurement (SVG run rects,
   // frame ink overflow) skips the glyph extents of simple glyphs.
   bool optimizeSpeed = false;
+  // CSS letter-spacing in px, added after every cluster (nsTextFrame
+  // PropertyProvider::GetSpacing, rounded to app units).
+  double letterSpacing = 0;
   ruyijs::domain::geometry::SvgMatrix transform;
 };
 // nsLayoutUtils::GetTextRunFlagsForStyle: text-rendering:optimizeSpeed, or
@@ -26,10 +29,10 @@ bool TextRunOptimizeSpeed(const std::string& textRendering, double cssFontSize);
 // window.devicePixelRatio of the profile, for device-pixel prefs in layout.
 void SetDevicePixelRatio(double ratio);
 struct FontCollection;
-// font.default.<group> for the browser locale's language group ("serif" if unset).
+// font.default.<group> for the untagged-content language group ("serif" if unset).
 std::string DefaultGenericFamily();
-// The browser locale (the profile's navigator.language) whose language group
-// Firefox uses for unlabelled text; set by runtime when the profile is applied.
+// Overrides the OS locale Firefox uses for untagged text
+// (nsLanguageAtomService::GetLocaleLanguage); "" restores the OS locale.
 void SetBrowserLanguage(const std::string& language);
 // The text metrics a 2D canvas context reports, in CSS pixels, computed the way
 // Firefox reports them: the advance rounded to app units and divided by 60 in

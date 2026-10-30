@@ -100,7 +100,7 @@ bool Profile(JSContext* cx, JS::HandleObject object, bool complete,
                    complete, changes)) return false;
     } else if (group == "locale") {
       seen |= 8;
-      if (!Group(cx, nested, Kind::Locale, kLocaleFields, 1,
+      if (!Group(cx, nested, Kind::Locale, kLocaleFields, std::size(kLocaleFields),
                    complete, changes)) return false;
     } else if (group == "viewport") {
       // The baseline pins the window's inner size so it differs from the

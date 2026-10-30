@@ -28,6 +28,7 @@
 #include "domain/styling/css_color_names.cpp"
 #include "domain/styling/css_color_resolve.cpp"
 #include "domain/styling/css_color_computed.cpp"
+#include "domain/styling/css_specified_value.cpp"
 #include "domain/styling/css_selector_value.cpp"
 #include "domain/styling/css_media_feature.cpp"
 #include "domain/styling/css_media_value.cpp"

@@ -4,11 +4,13 @@ This is the maintainer path for the macOS shell. Windows x64 still installs from
 
 The same facts are written in [macos.zh-CN.md](macos.zh-CN.md).
 
-## Branches
+## What the macOS port adds
 
-`main` on the macOS maintainer line is this macOS branch. `release/macos` is the release branch. A fix lands on `release/macos` first, and `main` fast-forwards to that same commit. After each accepted fix the two branches match.
+The shared Python API, DOM, clock, and page logic stay one source tree. macOS adds the outer shell: a Unix-socket frame, an xpcshell Necko helper, Core Text, ImageIO, and Firefox's own Skia objects from the browser donor. The C client install name is `@rpath/libruyijs_client.dylib`.
 
-The upstream repository stays on the fetch-only `upstream` remote. Cut the update branch from `release/macos`, merge upstream there, review it, and merge it back into `release/macos`. Do not merge upstream into `main` directly.
+- Same API: JS contexts, DOM, the Python bridge, WebCrypto algorithms, and the static image formats.
+- Acceptable platform differences: a named pipe or a Unix socket, CNG or CommonCrypto, WIC or ImageIO, DirectWrite or Core Text. GIF disposal, glyph gamma, and CJK fallback follow the system decoder. They are not pixel-identical to Windows.
+- Not in this port: HTTP/3 stays version 20 while the socket process is off. `Context(tls=)` is copied to `NECKO_FIREFOX`, and this xpcshell does not read it. DNS, connect, and TLS timing slots stay 0. There is no macOS PyPI wheel, and `macos.url` stays empty.
 
 ## What lives where
 
@@ -144,12 +146,12 @@ The DataDome example's homepage result is a server score. It is not a missing Ma
 
 ## Comparison with Windows
 
-Reviewed against upstream 0.2.1. A row marked "same source" is unfinished on both platforms. This table describes the merged macOS shell. The previous local wheel and runtime zip were not rebuilt, and that zip is not a 0.2.1 archive.
+Reviewed against upstream `a626670`. That range includes the 0.2.1 shell, the CSSOM and iframe timing commits, and the AGPL-3.0-only license change. A row marked "same source" is unfinished on both platforms. This table describes the merged macOS shell. The previous local wheel and runtime zip were not rebuilt, and that zip is not a 0.2.1 archive.
 
 | Surface | Windows | macOS |
 | --- | --- | --- |
 | JS context, DOM, fingerprint, clock, Python bridge | Implemented | Same API |
-| Necko HTTP/1.1 and HTTP/2 | Implemented | Verified without the donor environment. A page navigation returned status 200 and version 20 (`h2`) |
+| Necko HTTP/1.1 and HTTP/2 | Implemented | Verified again without the donor environment. A page navigation and one iframe document each returned status 200 and version 20 (`h2`) |
 | HTTP/3 | Part of the Necko transport described in the README | Donor XUL contains neqo. With the socket process off, two direct requests stayed version 20 after the response sent `alt-svc` for `h3`. With the socket process on, this xpcshell exits with signal 11 and the log stays empty. No preference was added |
 | TLS profiles 100–159 | `Context(tls=)` | The same argument. It is copied to the xpcshell as `NECKO_FIREFOX`. This xpcshell script does not read it, so the ClientHello stays the donor Firefox 159 profile |
 | WebCrypto SHA, AES-CBC, AES-GCM, HMAC, ECDSA, ECDH | CNG | CommonCrypto and Security.framework |
@@ -163,7 +165,8 @@ Reviewed against upstream 0.2.1. A row marked "same source" is unfinished on bot
 | COLR and CPAL | Version 0, palette 0 | Version 0, palette 0. Table bytes come from `CTFontCopyTable` |
 | Glyph gamma | DirectWrite rendering mode | `SystemTextGamma` is 1.8 and `SystemTextContrast` is 1.0. `gasp` and `maxp` are readable |
 | WebTransport | Shared C++. `webtransport_worker.py` is absent from the tree | Same sources. A live session uses the HTTP/3 path in the row above |
-| WebCodecs, audio decode, WebGPU, iframe navigation, customized built-ins, XML, form target | Same source | Interface only, or an explicit unimplemented error |
+| iframe document load | Shared source. Necko ticks map through QueryPerformanceCounter | Same source. Ticks map through `steady_clock` milliseconds, as in `page_navigation.cpp`. One iframe document returned status 200 and `h2` |
+| WebCodecs, audio decode, WebGPU, customized built-ins, XML, form target | Same source | Interface only, or an explicit unimplemented error |
 | DataDome homepage | Server score | Server score. The example pass condition is unchanged |
 | Install | PyPI `win_amd64` wheel for 0.2.1 | The previous local `macosx_26_0_arm64` wheel was not rebuilt. `runtime.json` leaves `macos.url` empty. Its macOS size and sha256 describe that older zip, not this 0.2.1 shell |
 | C ABI client | DLL beside the shell | `libruyijs_client.dylib` install name `@rpath/libruyijs_client.dylib`, rpath `@executable_path`. XUL, xpcshell, and NSS names stay as Firefox wrote them |
@@ -188,3 +191,7 @@ Do not commit the Firefox tree, either objdir, `dist/js`, the helper venv, the m
 ## Reporting a macOS issue
 
 Include the ruyijs commit, the macOS version, the Xcode version, the Python version, the Firefox tag, and which of the two objdirs the build used.
+
+## Maintainer fork
+
+Upstream `main` stays the Windows release line. On the macOS maintainer fork, fixes land on `release/macos` first and that fork's `main` fast-forwards to the same commit. An upstream update is merged on a branch cut from `release/macos`, reviewed, and merged back. It is not merged into that fork's `main` directly.

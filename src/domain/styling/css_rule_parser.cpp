@@ -4,8 +4,57 @@
 #include "domain/styling/css_selector.h"
 #include "domain/styling/css_keyframes.h"
 #include "domain/styling/css_page_value.h"
+#include "domain/styling/css_specified_value.h"
 namespace ruyijs::domain::styling {
 namespace {
+// `@layer` followed by zero or more comma-separated layer names, each a dot-
+// separated list of identifiers; `names` gets them as "a, b.c" (Servo
+// LayerName serialization).
+bool LayerPrelude(const std::string& prelude,std::string* names) {
+  const auto lower=CssLower(prelude);
+  if(lower.rfind("@layer",0)!=0||(lower.size()>6&&!CssSpace(lower[6]))) return false;
+  names->clear();
+  const auto rest=CssTrim(std::string_view(prelude).substr(6));
+  if(rest.empty()) return true;
+  for(const auto& part:CssSplit(rest,',')) {
+    const auto name=CssTrim(part);
+    if(name.empty()) return false;
+    std::string clean;
+    for(const auto& piece:CssSplit(name,'.')) {
+      const auto ident=CssTrim(piece);
+      if(ident.empty()) return false;
+      for(char c:ident) if(!(std::isalnum(static_cast<unsigned char>(c))||c=='-'||c=='_'||static_cast<unsigned char>(c)>=128)) return false;
+      clean+=(clean.empty()?"":".")+ident;
+    }
+    *names+=(names->empty()?"":", ")+clean;
+  }
+  return true;
+}
+// `@property --name`.
+bool PropertyPrelude(const std::string& prelude,std::string* name) {
+  const auto lower=CssLower(prelude);
+  if(lower.rfind("@property",0)!=0||lower.size()<10||!CssSpace(lower[9])) return false;
+  *name=CssTrim(std::string_view(prelude).substr(9));
+  if(name->size()<3||name->compare(0,2,"--")!=0) return false;
+  for(char c:*name) if(CssSpace(c)) return false;
+  return true;
+}
+// The syntax / inherits / initial-value descriptors (last one wins), with
+// syntax as a double-quoted string and inherits lowercased.
+std::string PropertyDescriptors(std::string_view body) {
+  std::string syntax,inherits,initial;
+  for(const auto& part:CssSplit(body,';')) {
+    const auto colon=CssDelimiter(part,0,":");
+    if(colon>=part.size()) continue;
+    const auto name=CssLower(CssTrim(std::string_view(part).substr(0,colon)));
+    const auto value=CssTrim(std::string_view(part).substr(colon+1));
+    if(name=="syntax"&&value.size()>=2&&(value.front()=='"'||value.front()=='\'')&&value.back()==value.front())
+      syntax="\""+value.substr(1,value.size()-2)+"\"";
+    else if(name=="inherits"&&(CssLower(value)=="true"||CssLower(value)=="false")) inherits=CssLower(value);
+    else if(name=="initial-value") initial=CssSpecifiedValue("--x",value);
+  }
+  return syntax+'\x1f'+inherits+'\x1f'+initial;
+}
 class RuleParser {
  public:
   bool strict=false,valid=true;
@@ -28,6 +77,11 @@ class RuleParser {
       auto prelude=CssClean(rawPrelude);
       if(delimiter==text.size()||text[delimiter]==';') {
         if(nested) block+=std::string(text.substr(p,delimiter-p))+";";
+        else if(std::string names;LayerPrelude(prelude,&names)&&!names.empty()) {
+          flush();
+          auto row=std::make_shared<CssomRuleValue>();row->kind=kCssLayerStatement;row->selector=names;
+          result.push_back(std::move(row));++nodes;
+        }
         else if(!prelude.empty()&&prelude[0]!='@') valid=false;
         else if(strict&&!prelude.empty()) valid=false;
         p=delimiter==text.size()?delimiter:delimiter+1;continue;
@@ -56,6 +110,11 @@ class RuleParser {
         row->kind=7;auto frames=ParseCssKeyframes(std::string(body));
         nodes+=frames.rules.size();if(nodes>100000) {valid=false;break;}
         row->children=std::move(frames.rules);
+      } else if(std::string names;LayerPrelude(prelude,&names)&&names.find(',')==std::string::npos) {
+        row->kind=kCssLayerBlock;row->selector=names;
+        row->children=Rules(body,depth+1,nullptr,nested);
+      } else if(PropertyPrelude(prelude,&row->selector)) {
+        row->kind=kCssPropertyRule;row->condition=PropertyDescriptors(body);
       } else if(CssPagePrelude(rawPrelude,&row->selector)) {
         row->kind=6;row->declarations=CssPageBody(body);
 } else if(!prelude.empty()&&prelude[0]!='@'&&CssSelectorSyntax(prelude,nested)) {

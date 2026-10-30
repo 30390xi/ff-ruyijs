@@ -16,6 +16,25 @@ bool IsSpace(char16_t ch) {
 }
 }  // namespace
 
+bool CanvasLanguage(State& state, JS::HandleObject context, std::string* out) {
+  out->clear();
+  JSContext* cx = state.cx;
+  JS::RootedObject drawing(cx, DrawingState(cx, context));
+  JS::RootedValue lang(cx);
+  if (!drawing || !JS_GetElement(cx, drawing, uint32_t(kLang), &lang)) return false;
+  if (lang.isString()) {
+    JS::RootedString text(cx, lang.toString());
+    JS::UniqueChars bytes = JS_EncodeStringToUTF8(cx, text);
+    if (!bytes) return false;
+    if (*bytes.get() && std::string(bytes.get()) != "inherit") { *out = bytes.get(); return true; }
+  }
+  if (!state.langPort) return true;
+  JS::RootedValue canvas(cx, JS::GetReservedSlot(context, kContextCanvasSlot));
+  JS::RootedObject element(cx, canvas.isObject() && IsCanvas(state, canvas) ? &canvas.toObject() : nullptr);
+  if (!state.langPort(state.langPortContext, element, out)) return false;
+  if (*out == "-x-none") out->clear();
+  return true;
+}
 bool IsCanvas(State& state, JS::HandleValue value) {
   if (!value.isObject()) return false;
   JSContext* cx = state.cx;

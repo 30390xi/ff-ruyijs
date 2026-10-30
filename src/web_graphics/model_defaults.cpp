@@ -61,6 +61,8 @@ const ParameterDefault* PublicParameterDefault(int32_t name) noexcept {
     {0x8E4F,K::Number,1,{36430},"WEBGL_provoking_vertex"},
     {0x864F,K::Boolean,1,{0},"EXT_depth_clamp"},
     {0x8E1B,K::Number,1,{0},"EXT_polygon_offset_clamp"},
+    {0x935C,K::Number,1,{36001},"EXT_clip_control"},
+    {0x935D,K::Number,1,{37726},"EXT_clip_control"},
   };
   for (const auto& value : values) if (value.name == name) return &value;
   return nullptr;

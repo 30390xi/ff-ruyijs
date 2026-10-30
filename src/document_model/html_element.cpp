@@ -78,6 +78,46 @@ bool OffsetGet(JSContext* cx, const JS::CallArgs& args, Prop prop, Wrapper* entr
   args.rval().setInt32(rounded >= INT32_MAX ? INT32_MAX : rounded <= INT32_MIN ? INT32_MIN : int32_t(rounded));
   return true;
 }
+// nsGenericHTMLElement::Spellcheck: the nearest HTML element (self first)
+// with spellcheck="true"/"false" decides; else an editable element (designMode,
+// or a contenteditable ancestor) is checked; else only <textarea> is (input
+// text follows layout.spellcheckDefault, 1 on desktop, which reads false).
+bool SpellcheckValue(State& state, NodeKey key, bool* out) {
+  *out = false;
+  NodeSnapshot self;
+  if (!state.Check(state.model.Inspect(key, &self))) return false;
+  bool editable = false, decided = false;
+  for (NodeKey node = key; node.node;) {
+    NodeSnapshot snap;
+    if (!state.Check(state.model.Inspect(node, &snap))) return false;
+    if (snap.kind == NodeKind::Element && snap.is_html_element) {
+      std::optional<DomString> value;
+      if (!decided) {
+        if (!state.Check(state.model.GetAttribute(node, DomString(u"spellcheck"), &value))) return false;
+        if (value && (*value == u"true" || *value == u"false")) { *out = *value == u"true"; return true; }
+      }
+      std::optional<DomString> editing;
+      if (!editable && !decided) {
+        if (!state.Check(state.model.GetAttribute(node, DomString(u"contenteditable"), &editing))) return false;
+        if (editing) {
+          const DomString lowered = Lower(*editing);
+          if (lowered == u"false") decided = true;
+          else if (lowered.empty() || lowered == u"true" || lowered == u"plaintext-only") editable = true;
+        }
+      }
+    }
+    node = snap.parent;
+  }
+  if (!editable && self.owner_document.node) {
+    DomString design;
+    if (!state.Check(state.model.ReadDocumentMetadata(self.owner_document,
+            DocumentMetadataField::DesignMode, DomStringView(), &design))) return false;
+    editable = design == u"on";
+  }
+  if (editable) { *out = true; return true; }
+  *out = self.local_name && *self.local_name == u"textarea";
+  return true;
+}
 bool ReflectedGet(JSContext* cx, unsigned argc, JS::Value* vp) {
   auto args = JS::CallArgsFromVp(argc, vp);
   auto prop = Prop(FunctionSlot(args));
@@ -99,7 +139,11 @@ bool ReflectedGet(JSContext* cx, unsigned argc, JS::Value* vp) {
           value ? DomStringView(*value) : DomStringView()), args.rval());
     case Hidden: return args.rval().setBoolean(value.has_value()), true;
     case Draggable: return args.rval().setBoolean(value && *value == u"true"), true;
-    case Spellcheck: return args.rval().setBoolean(!value || *value != u"false"), true;
+    case Spellcheck: {
+      bool on = false;
+      if (!SpellcheckValue(state, entry->key, &on)) return false;
+      return args.rval().setBoolean(on), true;
+    }
     case TabIndex: return args.rval().setInt32(value ? ParseInt(*value) : 0), true;
     case IsContentEditable:
       return args.rval().setBoolean(value && (*value == u"true" || *value == u"plaintext-only")), true;

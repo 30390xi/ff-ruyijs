@@ -4,11 +4,13 @@
 
 同一份事实的英文版在 [macos.md](macos.md)。
 
-## 分支
+## 这个移植加了什么
 
-macOS 维护线的 `main` 就是这条 macOS 分支。`release/macos` 是发布分支。修正先提交到 `release/macos`，再把 `main` 快进到同一提交。每次接受修正之后，两条分支指向同一处。
+Python API、DOM、时钟和页面逻辑仍是同一份源码。macOS 增加的是外壳：Unix socket 帧、xpcshell Necko helper、Core Text、ImageIO，以及浏览器 donor 里 Firefox 自己的 Skia 对象。C 客户端的安装名是 `@rpath/libruyijs_client.dylib`。
 
-上游仓库只放在只拉取的 `upstream` 远端。从 `release/macos` 拉出更新分支，把上游合并进去并审查，再合并回 `release/macos`。不要把上游直接合并进 `main`。
+- 同一套 API：JS 上下文、DOM、Python 桥、WebCrypto 算法，以及静态图格式。
+- 可以接受的平台差异：命名管道或 Unix socket，CNG 或 CommonCrypto，WIC 或 ImageIO，DirectWrite 或 Core Text。GIF disposal、字形 gamma 和中文回退跟随系统解码器，不要求与 Windows 像素一致。
+- 这次移植不做：socket process 关闭时 HTTP/3 停在版本码 20。`Context(tls=)` 会写入 `NECKO_FIREFOX`，这只 xpcshell 不读它。DNS、连接和 TLS 计时保持 0。没有 macOS 的 PyPI wheel，`macos.url` 保持为空。
 
 ## 各部分放在哪
 
@@ -144,12 +146,12 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 
 ## 和 Windows 的比对
 
-对照上游 0.2.1。写着「同一份源码」的行，两边都还没做完。这张表描述的是合并后的 macOS 外壳。上一份本地 wheel 和运行时压缩包没有重打，那份压缩包也不是 0.2.1。
+对照上游 `a626670`。这段范围包含 0.2.1 外壳、CSSOM 与 iframe 计时，以及改为 AGPL-3.0-only 的许可证。写着「同一份源码」的行，两边都还没做完。这张表描述的是合并后的 macOS 外壳。上一份本地 wheel 和运行时压缩包没有重打，那份压缩包也不是 0.2.1。
 
 | 表面 | Windows | macOS |
 | --- | --- | --- |
 | JS 上下文、DOM、指纹、时钟、Python 桥 | 已实现 | 同一套 API |
-| Necko HTTP/1.1 与 HTTP/2 | 已实现 | 已验收，且没有 donor 环境。一次页面导航返回状态 200、版本码 20（`h2`） |
+| Necko HTTP/1.1 与 HTTP/2 | 已实现 | 这次外壳再次验收，且没有 donor 环境。一次页面导航和一个 iframe 文档都返回状态 200、版本码 20（`h2`） |
 | HTTP/3 | README 把它写进 Necko 传输 | donor 的 XUL 含有 neqo。socket process 关闭时，直连的两次请求在响应带上 `h3` 的 `alt-svc` 之后仍是版本码 20。打开后这只 xpcshell 以信号 11 退出，日志是空的。没有加偏好设置 |
 | TLS 配置 100–159 | `Context(tls=)` | 同一个参数。它被写进 xpcshell 的 `NECKO_FIREFOX`。这只 xpcshell 的脚本不读它，ClientHello 仍是 donor 的 Firefox 159 |
 | WebCrypto：SHA、AES-CBC、AES-GCM、HMAC、ECDSA、ECDH | CNG | CommonCrypto 与 Security.framework |
@@ -163,7 +165,8 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 | COLR 与 CPAL | 版本 0，调色板 0 | 版本 0，调色板 0。表字节来自 `CTFontCopyTable` |
 | 字形 gamma | DirectWrite 渲染模式 | `SystemTextGamma` 为 1.8，`SystemTextContrast` 为 1.0。可以读 `gasp` 和 `maxp` |
 | WebTransport | 与 Mac 共用的 C++。树里没有 `webtransport_worker.py` | 同一份源码。真正的会话走上面那条 HTTP/3 |
-| WebCodecs、音频解码、WebGPU、iframe 导航、自定义内置元素、XML、表单目标 | 同一份源码 | 只有接口，或者明确返回未实现 |
+| iframe 文档加载 | 同一份源码。Necko 时刻经 QueryPerformanceCounter 换算 | 同一份源码。时刻经 `steady_clock` 的毫秒换算，与 `page_navigation.cpp` 相同。一个 iframe 文档返回状态 200 和 `h2` |
+| WebCodecs、音频解码、WebGPU、自定义内置元素、XML、表单目标 | 同一份源码 | 只有接口，或者明确返回未实现 |
 | DataDome 首页 | 服务端评分 | 服务端评分。示例的通过条件不变 |
 | 安装 | PyPI 的 0.2.1 `win_amd64` wheel | 上一份本地 `macosx_26_0_arm64` wheel 没有重打。`runtime.json` 的 `macos.url` 仍为空。里面的 macOS 大小和 sha256 属于那份旧压缩包，不是这个 0.2.1 外壳 |
 | C ABI 客户端 | 外壳旁边的 DLL | `libruyijs_client.dylib` 的安装名是 `@rpath/libruyijs_client.dylib`，rpath 为 `@executable_path`。XUL、xpcshell、NSS 的安装名保持 Firefox 写好的样子 |
@@ -178,7 +181,7 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 2. TLS 配置。`Context(tls=)` 是上游参数，会作为 `NECKO_FIREFOX` 传给子进程。这只 xpcshell 不读它，所以没有第二张 ClientHello 表。停在这里，不加 JA3 开关。
 3. C 客户端安装名已经完成。`otool -D` 打印 `@rpath/libruyijs_client.dylib`，rpath 是 `@executable_path`。
 4. 图像像素。继续用 ImageIO。可以用一条夹具记下 GIF 背景色差异。只有 ImageIO 已经提供对应 disposal 时才改像素。
-5. 字体别名。Mac 只保留 `Osaka-Mono` 到 `Osaka`。字体选择仍走 Core Text 回退。上游的语言偏好、SimSun 和 Arial 列表留在 `font_collection.cpp` 的 Windows 一侧。 Windows 的缓存分隔符保持源码转义 `'\0'`，文件因此仍是文本。
+5. 字体别名。Mac 只保留 `Osaka-Mono` 到 `Osaka`。字体选择仍走 Core Text 回退。上游的语言偏好、SimSun 和 Arial 列表留在 `font_collection.cpp` 的 Windows 一侧。Windows 的缓存分隔符保持源码转义 `'\0'`，文件因此仍是文本。
 6. 发布。`runtime.json` 的 `macos.url` 保持为空。那里记下的压缩包是上一份外壳，不是 0.2.1。这一轮不重打 wheel，也不重打压缩包。COLRv1、Linux、Intel Mac，以及低于 macOS 26 的系统都不做。
 
 ## 不要提交的东西
@@ -188,3 +191,7 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 ## 报告 macOS 问题
 
 请带上 ruyijs 的提交、macOS 版本、Xcode 版本、Python 版本、Firefox 标签，以及构建用的是哪一份 objdir。
+
+## 维护方自己的 fork
+
+上游 `main` 仍是 Windows 发布线。在 macOS 维护方的 fork 上，修正先进入 `release/macos`，该 fork 的 `main` 再快进到同一提交。上游更新从 `release/macos` 拉出分支合并、审查，再合并回去，不直接合并进该 fork 的 `main`。

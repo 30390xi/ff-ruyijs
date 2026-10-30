@@ -40,7 +40,10 @@ std::wstring Wide(const std::string& text) {
 #endif
 }
 std::mutex g_language_lock;
-std::string g_language;  // The browser locale; the OS locale when unset.
+// The language of untagged content: nsLanguageAtomService::GetLocaleLanguage,
+// the OS regional-preferences locale (not navigator.language / Accept-Language);
+// an explicit override when a profile emulates another OS locale.
+std::string g_language;
 std::string Group(const std::string& language) {
   auto value = language;
   if (value.empty()) {
