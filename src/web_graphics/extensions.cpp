@@ -1,5 +1,6 @@
 #include "web_graphics/internal.h"
 #include <cstring>
+#include <string>
 #include "js/Symbol.h"
 #include "js/CharacterEncoding.h"
 #include "runtime/page_helpers.h"
@@ -40,6 +41,23 @@ bool ExtensionCall(JSContext* cx, unsigned argc, JS::Value* vp) {
     if (op <= 4) args.rval().setBoolean(owned && !detail::ObjectDeleted(&v.toObject()));
     else if (owned) JS::SetReservedSlot(&v.toObject(), detail::kObjectDeletedSlot, JS::BooleanValue(true));
     else if (!v.isNullOrUndefined()) detail::SetError(*context, kInvalidOperation);
+    return true;
+  }
+  if (op == 10) {
+    // WebGLExtensionClipControl::ClipControlEXT: two required GLenums; a value
+    // outside the enum sets INVALID_ENUM and leaves the state unchanged.
+    if (args.length() < 2)
+      return WebKit::Fail(cx, ("EXT_clip_control.clipControlEXT: At least 2 arguments required, but only " +
+                              std::to_string(args.length()) + " passed").c_str());
+    int32_t origin = 0, depth = 0;
+    if (!detail::ToEnum(cx, args[0], &origin) || !detail::ToEnum(cx, args[1], &depth)) return false;
+    if ((origin != 0x8CA1 && origin != 0x8CA2) || (depth != 0x935E && depth != 0x935F)) {
+      detail::SetError(*context, kInvalidEnum);
+      return true;
+    }
+    const double o = origin, d = depth;
+    SetParameterState(*context, 0x935C, ParameterKind::Number, 1, &o);
+    SetParameterState(*context, 0x935D, ParameterKind::Number, 1, &d);
     return true;
   }
   if (op == 7) {
@@ -114,13 +132,14 @@ bool InstallExtensions(State& s) {
     if (!face.prototype || !tag ||
         !JS_DefinePropertyById(s.cx, face.prototype, tagId, tag, JSPROP_READONLY) ||
         !JS_SetElement(s.cx, s.extensionPrototypes, i, face.prototype)) return false;
+    // Firefox's generated bindings define the operations, then the constants.
+    for (const auto& m : kMethods) if (m.extension == int(i))
+      if (!s.kit.Method(face, kExtensions[i].tag, m.name, ExtensionCall, m.length, m.op)) return false;
     for (const auto& c : kConstants) if (c.extension == int(i)) {
       JS::RootedValue value(s.cx, JS::NumberValue(c.value));
       if (!JS_DefineProperty(s.cx, face.prototype, c.name, value,
           JSPROP_READONLY|JSPROP_PERMANENT|JSPROP_ENUMERATE)) return false;
     }
-    for (const auto& m : kMethods) if (m.extension == int(i))
-      if (!s.kit.Method(face, kExtensions[i].tag, m.name, ExtensionCall, m.length, m.op)) return false;
     if (!s.kit.helpers->Interface(kExtensions[i].tag, face.prototype)) return false;
   }
   return true;

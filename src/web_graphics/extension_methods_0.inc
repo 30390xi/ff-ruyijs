@@ -30,3 +30,4 @@
 {35, "provokingVertexWEBGL", 1, 2240},
 {37, "framebufferTextureMultiviewOVR", 6, 2368},
 {38, "polygonOffsetClampEXT", 3, 2432},
+{39, "clipControlEXT", 2, 2506},

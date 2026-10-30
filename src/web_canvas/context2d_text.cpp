@@ -63,7 +63,7 @@ bool ReadTextState(State& state, JS::HandleObject context, detail::CanvasFont* f
 }  // namespace
 
 bool FillCanvasText(State& state, JS::HandleObject context, const std::u16string& text,
-                    double x, double y, double max_width) {
+                    double x, double y, double max_width, const TextTarget* into) {
   if (text.empty() || !std::isfinite(x) || !std::isfinite(y)) return true;
   if (std::isfinite(max_width) && max_width <= 0) return true;
   detail::CanvasFont font;
@@ -75,6 +75,7 @@ bool FillCanvasText(State& state, JS::HandleObject context, const std::u16string
   input.size = font.size;
   input.weight = font.weight;
   input.italic = font.italic;
+  if (!detail::CanvasLanguage(state, context, &input.language)) return false;
   web_geometry::CanvasTextMetrics metrics;
   if (!detail::Fonts(state).MeasureCanvas(text, input, &metrics)) return false;
   const bool rtl = direction == "rtl";
@@ -97,15 +98,27 @@ bool FillCanvasText(State& state, JS::HandleObject context, const std::u16string
   input.y = y;
   double matrix[6];
   if (!detail::GetMatrix(state.cx, context, matrix)) return false;
-  CanvasBinding* binding = detail::BindingOf(state, context);
-  JSObject* bitmap = detail::BitmapOf(binding);
-  if (!binding || !bitmap) return true;
-  uint8_t* pixels = detail::ViewBytes(bitmap);
-  if (!pixels) return true;
-  raster::Surface surface{pixels, int(binding->width), int(binding->height)};
+  raster::Surface surface;
+  if (into) {
+    surface = raster::Surface{into->pixels, into->width, into->height};
+  } else {
+    CanvasBinding* binding = detail::BindingOf(state, context);
+    JSObject* bitmap = detail::BitmapOf(binding);
+    if (!binding || !bitmap) return true;
+    uint8_t* pixels = detail::ViewBytes(bitmap);
+    if (!pixels) return true;
+    surface = raster::Surface{pixels, int(binding->width), int(binding->height)};
+  }
   raster::Paint paint;
   std::string fill_style;
   if (!BuildPaint(state, context, &paint, &fill_style)) return true;
+  if (into) {
+    // The temp target is drawn source-over; the real operator applies when
+    // it is composited (DrawSurfaceWithShadow(..., mCompositionOp)).
+    double alpha = 1.0;
+    if (!StateNumber(state.cx, context, kGlobalAlpha, &alpha)) return false;
+    if (!raster::PaintFromStyle(fill_style, alpha, "source-over", &paint)) return true;
+  }
   double horizontal_scale = 1.0;
   if (std::isfinite(max_width) && max_width > 0 && metrics.width > max_width)
     horizontal_scale = max_width / metrics.width;
@@ -115,6 +128,7 @@ bool FillCanvasText(State& state, JS::HandleObject context, const std::u16string
   // is rasterised at the squeezed width.
   uint8_t straight[4];
   if (!raster::ParseCSSColor(fill_style, straight)) return true;
+  if (into) { matrix[4] += into->dx; matrix[5] += into->dy; }
   float text_matrix[6] = {float(matrix[0]), float(matrix[1]), float(matrix[2]),
                           float(matrix[3]), float(matrix[4]), float(matrix[5])};
   if (horizontal_scale != 1.0) {
@@ -158,6 +172,7 @@ bool CanvasTextRuns(State& state, JS::HandleObject context, const std::u16string
   input.size = font.size;
   input.weight = font.weight;
   input.italic = font.italic;
+  if (!detail::CanvasLanguage(state, context, &input.language)) return false;
   web_geometry::CanvasTextMetrics metrics;
   if (!detail::Fonts(state).MeasureCanvas(text, input, &metrics)) return false;
   const bool rtl = direction == "rtl";

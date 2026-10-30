@@ -38,3 +38,5 @@
 {"EXT_color_buffer_float", "EXT_color_buffer_float"},
 {"OVR_multiview2", "OVR_multiview2"},
 {"EXT_polygon_offset_clamp", "EXT_polygon_offset_clamp"},
+{"EXT_clip_control", "EXT_clip_control"},
+{"EXT_texture_mirror_clamp_to_edge", "EXT_texture_mirror_clamp_to_edge"},

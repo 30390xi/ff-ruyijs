@@ -21,6 +21,7 @@ bool Model::Configure(const std::vector<Change>& changes) noexcept {
     double extra_storage_quota = candidate->storage_quota;
     double extra_storage_usage = candidate->storage_usage;
     bool extra_storage_persisted = candidate->storage_persisted;
+    std::string extra_os_locale = candidate->os_locale;
     for (const auto& change : changes) {
       const auto& value = change.value;
       if (change.kind == Kind::Navigator) {
@@ -68,6 +69,8 @@ bool Model::Configure(const std::vector<Change>& changes) noexcept {
         candidate->aggregate.configure_location(value.text);
       } else if (change.kind == Kind::Locale && change.field == 0) {
         if (!candidate->aggregate.configure_locale_timezone(value.text)) return false;
+      } else if (change.kind == Kind::Locale && change.field == 1) {
+        extra_os_locale = value.text;
       } else if (change.kind == Kind::Storage) {
         switch (change.field) {
           case 0: extra_storage_quota = value.number; break;
@@ -95,6 +98,7 @@ bool Model::Configure(const std::vector<Change>& changes) noexcept {
     candidate->storage_quota = extra_storage_quota;
     candidate->storage_usage = extra_storage_usage;
     candidate->storage_persisted = extra_storage_persisted;
+    candidate->os_locale = std::move(extra_os_locale);
     candidate->aggregate.configure_navigator(std::move(navigator));
     candidate->aggregate.configure_screen(std::move(screen));
     delete impl_;

@@ -69,7 +69,9 @@ bool StylePattern(JSContext* cx, JS::HandleObject context, int32_t field,
     if (!raster::ParseCSSColor(ascii, rgba)) return true;
     // nscolor -> sRGBColor::FromABGR -> DeviceColor (no colour management).
     pattern->kind = skia::Pattern::Kind::Color;
-    pattern->color = {rgba[0] / 255.0f, rgba[1] / 255.0f, rgba[2] / 255.0f, rgba[3] / 255.0f};
+    // ToDeviceColor(nscolor): sRGBColor::FromABGR multiplies by (1.0f / 255.0f).
+    pattern->color = {rgba[0] * (1.0f / 255.0f), rgba[1] * (1.0f / 255.0f),
+                      rgba[2] * (1.0f / 255.0f), rgba[3] * (1.0f / 255.0f)};
     *usable = true;
     return true;
   }
@@ -128,8 +130,11 @@ bool StylePattern(JSContext* cx, JS::HandleObject context, int32_t field,
       if (!JS_GetElement(cx, stops, i + j, &item)) return false;
       v[j] = item.toNumber();
     }
-    pattern->stops.push_back(skia::Stop{float(v[0]), {float(v[1] / 255.0), float(v[2] / 255.0),
-                                                      float(v[3] / 255.0), float(v[4] / 255.0)}});
+    // CanvasGradient::AddColorStop: ToDeviceColor(nscolor), sRGBColor::FromABGR.
+    pattern->stops.push_back(skia::Stop{float(v[0]), {float(v[1]) * (1.0f / 255.0f),
+                                                      float(v[2]) * (1.0f / 255.0f),
+                                                      float(v[3]) * (1.0f / 255.0f),
+                                                      float(v[4]) * (1.0f / 255.0f)}});
   }
   *usable = true;
   return true;
@@ -202,7 +207,8 @@ bool CurrentShadow(JSContext* cx, JS::HandleObject context, skia::ShadowStyle* s
   if (color.empty() || !raster::ParseCSSColor(color, rgba)) return true;
   const float blurF = float(blur), offsetXF = float(offsetX), offsetYF = float(offsetY);
   if (rgba[3] == 0 || (blurF == 0.f && offsetXF == 0.f && offsetYF == 0.f)) return true;
-  shadow->color = {rgba[0] / 255.0f, rgba[1] / 255.0f, rgba[2] / 255.0f, rgba[3] / 255.0f};
+  shadow->color = {rgba[0] * (1.0f / 255.0f), rgba[1] * (1.0f / 255.0f),
+                   rgba[2] * (1.0f / 255.0f), rgba[3] * (1.0f / 255.0f)};
   shadow->offsetX = offsetXF;
   shadow->offsetY = offsetYF;
   shadow->sigma = std::min(100.0f, blurF / 2.0f);  // ShadowBlurSigma, SIGMA_MAX
@@ -499,7 +505,31 @@ bool FillRecordedText(State& state, JS::HandleObject context, const std::u16stri
   if (ok && draw && !CurrentShadow(cx, context, &shadow, &shadowed)) return false;
   bool color = false;
   for (const auto& run : runs) color = color || run.colorFont;
-  if (ok && draw && color) {
+  if (ok && draw && color && shadowed) {
+    // gfxFont::RenderColorGlyph into AdjustedTargetForShadow's temp, which
+    // DrawTargetSkia::DrawSurfaceWithShadow then composites with the shadow.
+    // The temp covers the canvas grown by the shadow offset and blur margin.
+    const int margin = int(std::ceil(3 * double(shadow.sigma))) + 1;
+    const int dx = margin + int(std::ceil(std::max(0.0, double(shadow.offsetX))));
+    const int dy = margin + int(std::ceil(std::max(0.0, double(shadow.offsetY))));
+    const int w = target.width + 2 * margin + int(std::ceil(std::fabs(double(shadow.offsetX))));
+    const int h = target.height + 2 * margin + int(std::ceil(std::fabs(double(shadow.offsetY))));
+    if (w > 0 && h > 0 && w <= 32767 && h <= 32767 && size_t(w) * size_t(h) <= (size_t(1) << 26)) {
+      std::vector<uint8_t> temp(size_t(w) * size_t(h) * 4, 0);
+      TextTarget into{temp.data(), w, h, dx, dy};
+      web_geometry::ReleaseCanvasGlyphRuns(&runs);
+      if (!FillCanvasText(state, context, text, x, y, maxWidth, &into)) return false;
+      skia::Image image{temp.data(), w, h, false};
+      const double identity[6] = {1, 0, 0, 1, 0, 0};
+      const double source[4] = {0, 0, double(w), double(h)};
+      const double dest[4] = {double(-dx), double(-dy), double(w), double(h)};
+      skia::DrawOptions composite = options;
+      composite.alpha = 1.0f;  // globalAlpha is already in the temp
+      skia::DrawImage(target, identity, image, source, dest, false, composite, &shadow);
+      return true;
+    }
+    *handled = false;
+  } else if (ok && draw && color) {
     *handled = false;
   } else if (ok && draw) {
     std::vector<skia::TextRun> bridge;

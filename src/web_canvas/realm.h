@@ -30,6 +30,9 @@ class Realm final {
   // HTMLCanvasElement.captureStream() asks the Media owner for its
   // CanvasCaptureMediaStream (web_media::Realm::CaptureCanvas).
   void SetCaptureStreamPort(bool (*port)(void*, JS::HandleObject, JS::MutableHandleObject), void* context);
+  // The content language a canvas context inherits (ctx.lang "inherit"):
+  // the canvas element's inherited lang, or the root element's (null element).
+  void SetLangPort(bool (*port)(void*, JS::HandleObject, std::string*), void* context);
   // The canvas element's current width and height (its reflected content
   // attributes); the Media owner's canvas-capture track reads its settings here.
   bool ElementSize(JS::HandleObject canvas, uint32_t* width, uint32_t* height);

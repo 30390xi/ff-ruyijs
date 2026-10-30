@@ -73,12 +73,16 @@ bool ShapeFont(const SelectedFont& selected, const FontInput& input,
   hb_font_set_scale(font.get(), int(std::round(size * 65536)), int(std::round(size * 65536)));
   hb_font_set_ppem(font.get(), unsigned(size), unsigned(size));
   const bool bitmap = CJKFont(hbface.get()) && BitmapSize(hbface.get(), unsigned(std::round(size)));
-  HbPtr<hb_font_t, hb_font_destroy> shaping(bitmap ? hb_font_create_sub_font(font.get()) :
+  // gfxDWriteFontEntry::CreateFontFace: a bold request on a face without bold
+  // gets DirectWrite's bold simulation (gfx.font_rendering.directwrite.
+  // bold_simulation = 1), whose wider advances the shaper reads from the face.
+  const bool simulatedBold = !bitmap && (face->GetSimulations() & DWRITE_FONT_SIMULATIONS_BOLD);
+  HbPtr<hb_font_t, hb_font_destroy> shaping(bitmap || simulatedBold ? hb_font_create_sub_font(font.get()) :
                                         hb_font_reference(font.get()), hb_font_destroy);
   BitmapAdvance bitmapAdvance{face, float(size), float(size / metrics.designUnitsPerEm)};
-  if (bitmap) {
+  if (bitmap || simulatedBold) {
     auto* functions = hb_font_funcs_create();
-    hb_font_funcs_set_glyph_h_advance_func(functions, GdiAdvance, nullptr, nullptr);
+    hb_font_funcs_set_glyph_h_advance_func(functions, bitmap ? GdiAdvance : DesignAdvance, nullptr, nullptr);
     hb_font_set_funcs(shaping.get(), functions, &bitmapAdvance, nullptr);
     hb_font_funcs_destroy(functions);
   }
@@ -117,6 +121,8 @@ bool ShapeFont(const SelectedFont& selected, const FontInput& input,
   result->raw_advances.clear(); result->raw_offsets_x.clear(); result->raw_offsets_y.clear();
   result->glyph_clusters.clear();
   result->advances.assign(text.size(), 0); result->clusters.assign(text.size(), -1);
+  const int spacing = std::isfinite(input.letterSpacing)
+      ? int(std::floor(input.letterSpacing * input.scale * 60 + .5)) : 0;
   for (size_t i = 0; i < info.size(); ++i) {
     const auto cluster = info[i].cluster;
     if (cluster >= text.size()) return false;
@@ -180,6 +186,11 @@ bool ShapeFont(const SelectedFont& selected, const FontInput& input,
                     ink_unit * 60.0;
     result->ink.Union(bounds);
     result->advance += width;
+    // letter-spacing follows each cluster (its last glyph), in app units.
+    if (spacing != 0 && (i + 1 == info.size() || info[i + 1].cluster != cluster)) {
+      result->advance += spacing;
+      result->advances[cluster] += spacing;
+    }
   }
   for (size_t i = 1; i < text.size(); ++i)
     if (result->clusters[i] < 0) result->clusters[i] = result->clusters[i-1];

@@ -30,6 +30,9 @@ struct OffsetGeometry {
   // Element.scrollWidth/scrollHeight: the scrollable overflow area, at least
   // the padding box (0 for a non-replaced inline box).
   double scroll_width = 0, scroll_height = 0;
+  // The root element's own box overflow (its scroll size when the viewport is
+  // scrolled by <body>, as in a quirks-mode document).
+  double own_scroll_width = 0, own_scroll_height = 0;
   // Element.clientLeft/clientTop: the left/top border widths (0 for an inline box).
   double client_left = 0, client_top = 0;
   bool scroller = false;  // A scroll container (overflow hidden/auto/scroll).

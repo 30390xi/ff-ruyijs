@@ -123,6 +123,8 @@ bool Model::Read(Kind kind, uint32_t field, FieldValue* result) const noexcept {
       else return false;
     } else if (kind == Kind::Locale && field == 0) {
       result->text = owner.locale().timezone();
+    } else if (kind == Kind::Locale && field == 1) {
+      result->text = impl_->os_locale;
     } else if (kind == Kind::Viewport) {
       if (field == 0) result->integer = impl_->viewport_width < 0
           ? owner.screen().avail_width() : impl_->viewport_width;

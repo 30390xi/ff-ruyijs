@@ -6,6 +6,7 @@
 #include "interaction/realm.h"
 #include "execution_scheduling/realm.h"
 #include "resource_network/page_http.h"
+#include "web_platform/text_codec.h"
 #include "domain/document_model/script_state.h"
 #include "jsapi.h"
 #include "js/CharacterEncoding.h"
@@ -31,11 +32,46 @@ bool ModuleType(const std::string& type) {
       std::tolower(static_cast<unsigned char>(type[first + 5])) == 'e';
 }
 }
-// One fetched classic script body, without a leading UTF-8 BOM; null when the
-// bytes do not decode (the element then reports its load error).
+// One fetched classic script body (ScriptLoadHandler::TrySetDecoder): the BOM's
+// encoding (BOM removed), else the response's charset parameter, else the
+// fallback, here UTF-8 (the document encoding of a UTF-8 page). Decoding
+// replaces malformed bytes with U+FFFD as Firefox's DecodeToUTF16 does, so a
+// stray Latin-1 byte in a comment never stops the script. Null on OOM/limit.
 JSString* PageLoad::ScriptBody(JSContext* cx, const resource_network::HttpResult& http) {
-  const size_t bom = http.body.rfind("ï»¿", 0) == 0 ? 3 : 0;
-  return JS_NewStringCopyUTF8N(cx, JS::UTF8Chars(http.body.data() + bom, http.body.size() - bom));
+  std::string_view bytes(http.body);
+  std::string encoding;
+  if (bytes.rfind("\xEF\xBB\xBF", 0) == 0) { encoding = "UTF-8"; bytes.remove_prefix(3); }
+  else if (bytes.rfind("\xFE\xFF", 0) == 0) { encoding = "UTF-16BE"; bytes.remove_prefix(2); }
+  else if (bytes.rfind("\xFF\xFE", 0) == 0) { encoding = "UTF-16LE"; bytes.remove_prefix(2); }
+  else {
+    for (const auto& field : http.headers) {
+      std::string name = field.first;
+      for (auto& c : name) c = char(std::tolower(static_cast<unsigned char>(c)));
+      if (name != "content-type") continue;
+      std::string value = field.second;
+      for (auto& c : value) c = char(std::tolower(static_cast<unsigned char>(c)));
+      const auto at = value.find("charset=");
+      if (at == std::string::npos) continue;
+      std::string label = field.second.substr(at + 8);
+      label = label.substr(0, label.find(';'));
+      while (!label.empty() && (label.front() == ' ' || label.front() == '"' || label.front() == '\''))
+        label.erase(label.begin());
+      while (!label.empty() && (label.back() == ' ' || label.back() == '"' || label.back() == '\''))
+        label.pop_back();
+      std::string resolved;
+      if (web_platform::EncodingFromLabel(label, &resolved)) encoding = resolved;
+    }
+    if (encoding.empty()) encoding = "UTF-8";
+  }
+  if (encoding == "UTF-8") {
+    // The common case stays on the UTF-8 path; only malformed input decodes.
+    JSString* text = JS_NewStringCopyUTF8N(cx, JS::UTF8Chars(bytes.data(), bytes.size()));
+    if (text) return text;
+    JS_ClearPendingException(cx);
+  }
+  const auto decoded = web_platform::DecodeBytes(encoding, bytes);
+  if (decoded.error) { JS_ReportOutOfMemory(cx); return nullptr; }
+  return JS_NewUCStringCopyN(cx, decoded.text.data(), decoded.text.size());
 }
 bool PageLoad::Source(Owners& owners, JS::HandleObject script, const std::string& base,
                       JS::MutableHandleString code, std::string* filename, bool* defer,

@@ -11,7 +11,14 @@
 #include "execution_scheduling/realm.h"
 #include "execution_scheduling/navigation_timing.h"
 #include "resource_network/page_http.h"
+#include "domain/browser_environment/url_value.h"
+#include "domain/execution_scheduling/resource_timing.h"
+#include <algorithm>
 #include <cctype>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 #include "domain/resource_network/cookie_scope.h"
 #include "web_speech/realm.h"
 #include "jsapi.h"
@@ -186,6 +193,11 @@ bool PageLoad::LoadFrame(BrowsingContext& target, const std::string& url,
   // (docs/owners/NAVIGATION_TIMING.md).
   const auto started = scheduling_.Inspect();
   const double origin = started.epoch + started.now;
+  // The Necko boundary ticks (QPC milliseconds) map onto this clock from here.
+  LARGE_INTEGER counter{}, frequency{};
+  QueryPerformanceCounter(&counter);
+  QueryPerformanceFrequency(&frequency);
+  const double qpc = double(counter.QuadPart) * 1000 / double(frequency.QuadPart);
   resource_network::PerformHttp(owners.resources, method, url, headers, requestBody,
       &http, resource_network::RedirectMode::Follow, options);
   // Commit the response URL, not the pre-redirect request URL. This is also
@@ -203,7 +215,7 @@ bool PageLoad::LoadFrame(BrowsingContext& target, const std::string& url,
   if (target.security) target.security->Reset();
   if (http.status != 0) body = http.body;
   const auto ended = scheduling_.Inspect();
-  if (!RecordFrameNavigation(target, committed, http, origin, ended.epoch + ended.now)) return false;
+  if (!RecordFrameNavigation(target, committed, http, origin, ended.epoch + ended.now, qpc)) return false;
   owners.document.SetDocumentReferrer(http.referrer);
   JS::RootedString markup(owners.cx, JS_NewStringCopyUTF8N(owners.cx,
       JS::UTF8Chars(body.data(), body.size())));
@@ -248,24 +260,58 @@ bool PageLoad::LoadFrameHtml(BrowsingContext& target, const std::string& html) {
 // lifecycle milestones the load path stamps later are offsets from it.
 bool PageLoad::RecordFrameNavigation(BrowsingContext& target, const std::string& url,
                                      const resource_network::HttpResult& http,
-                                     double origin, double responseEnd) {
+                                     double origin, double responseEnd, double qpc) {
   execution_scheduling::NavigationTiming timing;
   timing.present = true;
   timing.time_origin = origin;
-  timing.response_start = responseEnd - origin;
-  timing.response_end = responseEnd - origin;
+  // Necko's measured phases of the final hop, as offsets from the frame's own
+  // origin (its fetchStart); an unmeasured phase falls back to the one before.
+  const double end = responseEnd - origin;
+  const auto at = [&](double tick, double fallback) {
+    return tick > 0 ? std::clamp(tick - qpc, 0.0, end) : fallback;
+  };
+  timing.fetch_start = 0.0;
+  timing.dns_start = at(http.dnsStartTick, 0);
+  timing.dns_end = at(http.dnsEndTick, timing.dns_start);
+  timing.connect_start = at(http.connectStartTick, timing.dns_end);
+  timing.connect_end = at(http.connectEndTick, timing.connect_start);
+  timing.secure_start = url.rfind("https:", 0) == 0 ? at(http.secureTick, timing.connect_end) : 0;
+  timing.establishment = true;
+  timing.request_start = at(http.requestTick, timing.connect_end);
+  timing.response_start = at(http.responseTick, at(http.headersTick, end));
+  timing.response_end = end;
   timing.redirect_count = uint16_t(http.redirected ? 1 : 0);
   timing.status = uint16_t(http.status);
   timing.encoded_size = http.encodedBytes;
   timing.decoded_size = http.decodedBytes;
   timing.protocol = http.protocol;
   timing.name = url.substr(0, url.find('#'));
+  std::string tao;
   for (const auto& field : http.headers) {
     std::string key = field.first;
     for (auto& c : key) c = char(std::tolower(static_cast<unsigned char>(c)));
+    if (key == "timing-allow-origin") tao += (tao.empty() ? "" : ",") + field.second;
     if (key != "content-type") continue;
     timing.content_type = field.second.substr(0, field.second.find(';'));
     while (!timing.content_type.empty() && timing.content_type.back() == ' ') timing.content_type.pop_back();
+  }
+  // The frame load's loading principal is the parent document's.
+  if (target.parent) {
+    JS::RootedValue origin(cx_);
+    {
+      JSAutoRealm realm(cx_, target.parent->page);
+      if (!target.parent->environment->Origin(&origin)) return false;
+    }
+    std::string parent;
+    if (origin.isString()) {
+      JS::RootedString text(cx_, origin.toString());
+      if (!ToUTF8(cx_, text, &parent)) return false;
+    }
+    const std::string self = domain::browser_environment::UrlValue(timing.name).origin();
+    const bool same = !parent.empty() && parent != "null" && parent == self;
+    timing.body_allowed = same;
+    timing.timing_allowed = same ||
+        domain::execution_scheduling::ResourceTimingAccess::TimingOrigin(tao, parent);
   }
   return scheduling_.RecordNavigation(target.page, timing);
 }

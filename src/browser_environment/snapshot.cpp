@@ -45,7 +45,7 @@ bool Environment::ExportWorkerProfile(std::string* result) {
   JS::RootedObject output(state.cx, JS_NewPlainObject(state.cx));
   if (!output || !Group(state, output, "navigator", Kind::Navigator, kNavigatorFields,
                         std::size(kNavigatorFields), true) ||
-      !Group(state, output, "locale", Kind::Locale, kLocaleFields, 1) ||
+      !Group(state, output, "locale", Kind::Locale, kLocaleFields, std::size(kLocaleFields)) ||
       !state.ExportWorkerContext(output) || !state.ExportWorkerGroups(output)) return false;
   WorkerJSON json;
   if (!JS::ToJSONMaybeSafely(state.cx, output, AppendWorkerJSON, &json))
@@ -69,7 +69,7 @@ bool Environment::Describe(JS::MutableHandleValue result) {
                std::size(kViewportFields)) ||
       !Group(state, output, "location", Kind::Location, kLocationFields,
                std::size(kLocationFields)) ||
-      !Group(state, output, "locale", Kind::Locale, kLocaleFields, 1) ||
+      !Group(state, output, "locale", Kind::Locale, kLocaleFields, std::size(kLocaleFields)) ||
       !Group(state, output, "storage", Kind::Storage, kStorageFields,
              std::size(kStorageFields)) ||
       !Group(state, output, "history", Kind::History, &history, 1)) return false;

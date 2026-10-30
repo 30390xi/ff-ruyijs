@@ -20,6 +20,14 @@ struct FlexItem {
 };
 struct FlexLine { std::vector<FlexItem*> items; double cross = 0, offset = 0, used = 0; };
 bool AutoText(const std::string& v) { return v.empty() || v == "auto"; }
+// The line box height of a text flex item, and the half-leading above its
+// glyphs' content area.
+double TextLine(const BoxNode& node) {
+  return std::max(node.line_height >= 0 ? node.line_height : node.text_height, 0.0);
+}
+double Leading(const BoxNode& node) {
+  return node.line_height >= 0 ? (node.line_height - node.text_height) / 2 : 0.0;
+}
 double Factor(const std::string& text, double fallback) {
   char* end = nullptr;
   const double value = std::strtod(text.c_str(), &end);
@@ -180,7 +188,9 @@ bool BoxFlow::FlexChildren(size_t index, size_t positioned, unsigned depth, doub
       return std::isfinite(value) && border_box ? std::max(0.0, value - extra) : value;
     };
     if (node.text) {
-      item.base = item.hypo = column ? node.text_height : node.text_width;
+      // A text run is an anonymous block flex item holding one line box: its
+      // block size is the line height (nsLineLayout), not the glyph extent.
+      item.base = item.hypo = column ? TextLine(node) : node.text_width;
       item.min = column ? item.base : (node.breakable ? 0 : item.base);
       item.max = std::numeric_limits<double>::infinity();
       continue;
@@ -274,12 +284,15 @@ bool BoxFlow::FlexChildren(size_t index, size_t positioned, unsigned depth, doub
       }
       if (!Place(item->node, content, definite_height, bx - box.margin[3], by - box.margin[0], positioned, depth + 1))
         return false;
-      if (item->text) ShiftBoxes(item->node, BoxRound(bx) - box.border[0], BoxRound(by) - box.border[1]);
+      // The glyphs sit half the leading below the anonymous block's top.
+      if (item->text) ShiftBoxes(item->node, BoxRound(bx) - box.border[0],
+                                 BoxRound(by + Leading(nodes[item->node])) - box.border[1]);
     }
     for (auto* item : line.items) {
       const auto& box = boxes[item->node];
+      const double block = item->text ? TextLine(nodes[item->node]) : box.border[3];
       line.cross = std::max(line.cross, column ? box.border[2] + box.margin[1] + box.margin[3]
-                                               : box.border[3] + box.margin[0] + box.margin[2]);
+                                               : block + box.margin[0] + box.margin[2]);
     }
   }
   if (!wrap && std::isfinite(inner_cross)) lines[0].cross = inner_cross;

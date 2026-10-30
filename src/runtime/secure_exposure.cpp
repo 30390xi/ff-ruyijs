@@ -7,11 +7,13 @@
 
 namespace ruyijs {
 bool ConfigureSecureExposure(BrowsingContext& context) {
-  // The browser locale picks the language group of unlabelled text and the
-  // initial font-family, as Firefox's intl.accept_languages does.
-  std::string language;
-  if (!context.environment->ReadLanguage(&language)) return false;
-  web_geometry::SetBrowserLanguage(language);
+  // Untagged text takes the OS locale's language group in Firefox
+  // (nsLanguageAtomService::GetLocaleLanguage), not navigator.language, which
+  // only feeds Accept-Language; the initial font-family follows that group.
+  // locale.osLocale overrides the host OS locale ("" keeps it).
+  std::string osLocale;
+  if (!context.environment->ReadOsLocale(&osLocale)) return false;
+  web_geometry::SetBrowserLanguage(osLocale);
   double ratio = 1;
   if (!context.environment->ReadDevicePixelRatio(&ratio)) return false;
   web_geometry::SetDevicePixelRatio(ratio);

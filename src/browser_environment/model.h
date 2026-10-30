@@ -69,7 +69,10 @@ inline constexpr Field kLocationFields[] = {
   {"search", ValueType::String}, {"hash", ValueType::String},
   {"origin", ValueType::String}
 };
-inline constexpr Field kLocaleFields[] = {{"timezone", ValueType::String}};
+// osLocale: the OS regional-preferences locale (Intl default locale and the
+// language group of untagged text in Firefox); "" means the host OS locale.
+inline constexpr Field kLocaleFields[] = {{"timezone", ValueType::String},
+                                          {"osLocale", ValueType::String}};
 // The content viewport is separate from Screen: Firefox's browser content
 // area is commonly shorter than screen.availHeight and iframe contexts have
 // their own content boxes. It is optional in profiles for backward parity.

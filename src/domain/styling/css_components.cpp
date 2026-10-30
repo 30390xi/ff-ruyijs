@@ -104,9 +104,37 @@ bool CssSelectorValid(std::string_view v) {
   for(const auto& s:CssSplit(v,',')) if(s.empty()) return false;
   return closing.empty();
 }
+namespace {
+// Servo writes each combinator between single spaces (a ~ b, a > b, a + b)
+// and a descendant combinator as one space; brackets, parentheses, strings
+// and escapes are copied unchanged.
+std::string SelectorCombinators(std::string_view v) {
+  std::string out;int depth=0;
+  for(size_t p=0;p<v.size();++p) {
+    const char c=v[p];
+    if(c=='\\'&&p+1<v.size()) { out+=c;out+=v[++p];continue; }
+    if(c=='\''||c=='"') { const size_t end=StringEnd(v,p);out.append(v.substr(p,end-p));p=end-1;continue; }
+    if(c=='('||c=='[') ++depth;
+    if((c==')'||c==']')&&depth>0) --depth;
+    if(depth==0&&(c=='>'||c=='+'||c=='~')) {
+      while(!out.empty()&&out.back()==' ') out.pop_back();
+      out+=out.empty()?std::string(1,c)+" ":std::string(" ")+c+" ";
+      while(p+1<v.size()&&CssSpace(v[p+1])) ++p;
+      continue;
+    }
+    if(depth==0&&CssSpace(c)) {
+      if(!out.empty()&&out.back()!=' ') out+=' ';
+      continue;
+    }
+    out+=c;
+  }
+  while(!out.empty()&&out.back()==' ') out.pop_back();
+  return out;
+}
+}
 std::string CssSelectorText(std::string_view v) {
   auto parts=CssSplit(CssClean(v),',');std::string result;
-  for(auto& p:parts) { if(!result.empty()) result+=", ";result+=p; }
+  for(auto& p:parts) { if(!result.empty()) result+=", ";result+=SelectorCombinators(p); }
   return result;
 }
 }

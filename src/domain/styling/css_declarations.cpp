@@ -4,6 +4,7 @@
 #include "domain/styling/css_font_value.h"
 #include "domain/styling/css_box_value.h"
 #include "domain/styling/css_page_value.h"
+#include "domain/styling/css_specified_value.h"
 #include <algorithm>
 #include <charconv>
 namespace ruyijs::domain::styling {
@@ -12,6 +13,8 @@ std::string CssCanonicalDeclarationName(const std::string& input) {
   const auto name=CssLower(input);
   if(name=="-moz-transform"||name=="-webkit-transform") return "transform";
   if(name=="-ms-transform"||name=="-o-transform") return {};
+  // A Firefox alias (CSS2Properties dash-case accessor) names its property.
+  if(auto target=CssPropertyAliasTarget(name);!target.empty()) return target;
   return name;
 }
 namespace {
@@ -55,6 +58,8 @@ std::vector<CssDeclarationValue> Parse(const std::string& text,CssDeclarationCon
     if(name.empty()) continue;
     name=CssCanonicalDeclarationName(name);
     if(name.empty()) continue;
+    // Servo drops a declaration of a property it does not implement.
+    if(context==CssDeclarationContext::Standard&&!CssKnownProperty(name)) continue;
     bool valid=true;
     for(char c:name) if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='-'||c=='_'||static_cast<unsigned char>(c)>=128)) valid=false;
     if(!valid) continue;
@@ -73,12 +78,13 @@ std::vector<CssDeclarationValue> Parse(const std::string& text,CssDeclarationCon
     else if(CssBoxShorthand(name)) { if(!CssBoxExpand(name,value,important,&expanded)) continue; }
     else expanded.push_back({std::move(name),std::move(value),important});
     for(auto& row:expanded) {
+      if(context==CssDeclarationContext::Standard) row.value=CssSpecifiedValue(row.name,row.value);
+      // PropertyDeclarationBlock::push (parsing): a repeated property replaces
+      // the earlier declaration by removing it and appending the new one,
+      // unless the earlier one is important and this one is not.
       auto old=std::find_if(result.begin(),result.end(),[&](const auto& r){return r.name==row.name;});
       if(old==result.end()) result.push_back(std::move(row));
-      else if(!old->important||important) {
-        if(context==CssDeclarationContext::Page) {result.erase(old);result.push_back(std::move(row));}
-        else *old=std::move(row);
-      }
+      else if(!old->important||important) {result.erase(old);result.push_back(std::move(row));}
     }
   }
   return result;
@@ -112,8 +118,9 @@ std::string CssSetDeclaration(std::string& block,const std::string& inputName,
   auto found=std::find_if(rows.begin(),rows.end(),[&](const auto& row){return row.name==name;});
   if(found!=rows.end()) old=found->value;
   if(remove||value.empty()) { if(found!=rows.end()) rows.erase(found); }
-  else if(found==rows.end()) rows.push_back({name,DeclarationValue(name,value),important});
-  else { found->value=DeclarationValue(name,value);found->important=important; }
+  else if(!CssKnownProperty(name)) return old;
+  else if(found==rows.end()) rows.push_back({name,CssSpecifiedValue(name,DeclarationValue(name,value)),important});
+  else { found->value=CssSpecifiedValue(name,DeclarationValue(name,value));found->important=important; }
   }
   block=CssSerializeBlock(rows);
   return old;
