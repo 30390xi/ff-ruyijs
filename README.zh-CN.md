@@ -8,7 +8,7 @@
 原生的 Firefox JavaScript 引擎与网络栈，没有窗口、没有渲染器 ——<br>
 专为网页抓取、JS 逆向、数据采集与绕过人机验证而生。
 
-[![PyPI](https://img.shields.io/pypi/v/ruyijs?label=pypi&color=111111&logo=pypi&logoColor=white)](https://pypi.org/project/ruyijs/) [![Python](https://img.shields.io/badge/Python-%E2%89%A53.10-111111?logo=python&logoColor=white)](https://pypi.org/project/ruyijs/) [![License](https://img.shields.io/badge/license-Source%20Available-111111)](LICENSE) [![Windows](https://img.shields.io/badge/Windows%20x64-0078D4?logo=windows&logoColor=white)](https://pypi.org/project/ruyijs/) [![LinuxDO](https://img.shields.io/badge/LinuxDO-社区-FFB003?logo=discourse&logoColor=white)](https://linux.do/t/topic/3078486)
+[![PyPI](https://img.shields.io/pypi/v/ruyijs?label=pypi&color=111111&logo=pypi&logoColor=white)](https://pypi.org/project/ruyijs/) [![Python](https://img.shields.io/badge/Python-%E2%89%A53.10-111111?logo=python&logoColor=white)](https://pypi.org/project/ruyijs/) [![License](https://img.shields.io/badge/license-AGPL--3.0%20%2B%20商业授权-111111)](LICENSE) [![Windows](https://img.shields.io/badge/Windows%20x64-0078D4?logo=windows&logoColor=white)](https://pypi.org/project/ruyijs/) [![LinuxDO](https://img.shields.io/badge/LinuxDO-社区-FFB003?logo=discourse&logoColor=white)](https://linux.do/t/topic/3078486)
 
 <sub>赞助商</sub>
 
@@ -16,7 +16,7 @@
 
 **[安装](#-安装)** &nbsp;·&nbsp; **[功能](#-功能)** &nbsp;·&nbsp; **[攻克的验证系统](#-攻克的验证系统)** &nbsp;·&nbsp; **[示例](#-运行示例)** &nbsp;·&nbsp; **[FAQ](#-常见问题)** &nbsp;·&nbsp; **[联系](#-联系方式)** &nbsp;·&nbsp; **[LinuxDO](https://linux.do/t/topic/3078486)** &nbsp;·&nbsp; [English](README.md) · **简体中文**
 
-> **⚠️ 声明：** 本项目用于研究新一代 AI 浏览器，拒绝任何形式的暴力逆向破解。源码全部开源，禁止未经授权的商业化用途。
+> **⚠️ 声明：** 本项目用于研究新一代 AI 浏览器，拒绝任何形式的暴力逆向破解。源码按 AGPL-3.0 开源；闭源或私有化使用须取得商业授权。
 
 <br>
 
@@ -313,13 +313,14 @@ python -m ruyijs.examples creepjs
 
 ## 📄 许可证
 
-基于 **[ff-ruyijs Source Available License v1.0](LICENSE)** 发布。
+ff-ruyijs 采用**双许可**：
 
-- ✅ 个人学习、学术研究、非商业用途可自由使用
-- ✅ 修改后分发**必须开源**完整源码
-- ❌ 商业用途**必须取得作者书面授权**
+- **[AGPL-3.0](LICENSE)**：任何用途（包括商业用途）均可免费使用，前提是遵守协议：分发本项目或其修改版本，**或通过网络向用户提供服务**（托管服务、API）时，必须按 AGPL-3.0 公开你所用版本的完整源码。
+- **[商业授权](COMMERCIAL-LICENSE.md)**：用于闭源产品或服务，或不希望公开修改时，必须取得作者授权。
 
-商业授权请添加作者微信（**如意**）或在 [GitHub](https://github.com/cutetailbud/ff-ruyijs) 提交 issue。
+商业授权请添加作者微信（**如意**）或在 [GitHub](https://github.com/cutetailbud/ff-ruyijs) 提交标题为 "Commercial license" 的 issue。
+
+源自 Mozilla 的代码（SpiderMonkey、Necko）仍为 MPL-2.0。0.2.1 及以前的版本保持其发布时的许可证。
 
 第三方声明见 [`NOTICE`](NOTICE)。
 
