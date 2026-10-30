@@ -21,6 +21,7 @@ All notable changes to this project are documented here. The format follows
 ### Fixed
 
 - The Windows family/language cache key in `font_collection.cpp` is a `'\0'` separator again, so that half compiles. The macOS key stays a newline. `requests`, `brotli`, and `zstandard` stay Darwin dependencies.
+- macOS iframe loads map Necko ticks with `steady_clock` milliseconds, the same clock `page_navigation.cpp` already uses. Windows keeps `QueryPerformanceCounter`.
 
 ### Changed
 

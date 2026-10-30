@@ -146,12 +146,12 @@ The DataDome example's homepage result is a server score. It is not a missing Ma
 
 ## Comparison with Windows
 
-Reviewed against upstream 0.2.1. A row marked "same source" is unfinished on both platforms. This table describes the merged macOS shell. The previous local wheel and runtime zip were not rebuilt, and that zip is not a 0.2.1 archive.
+Reviewed against upstream `a626670`. That range includes the 0.2.1 shell, the CSSOM and iframe timing commits, and the AGPL-3.0-only license change. A row marked "same source" is unfinished on both platforms. This table describes the merged macOS shell. The previous local wheel and runtime zip were not rebuilt, and that zip is not a 0.2.1 archive.
 
 | Surface | Windows | macOS |
 | --- | --- | --- |
 | JS context, DOM, fingerprint, clock, Python bridge | Implemented | Same API |
-| Necko HTTP/1.1 and HTTP/2 | Implemented | Verified without the donor environment. A page navigation returned status 200 and version 20 (`h2`) |
+| Necko HTTP/1.1 and HTTP/2 | Implemented | Verified again without the donor environment. A page navigation and one iframe document each returned status 200 and version 20 (`h2`) |
 | HTTP/3 | Part of the Necko transport described in the README | Donor XUL contains neqo. With the socket process off, two direct requests stayed version 20 after the response sent `alt-svc` for `h3`. With the socket process on, this xpcshell exits with signal 11 and the log stays empty. No preference was added |
 | TLS profiles 100–159 | `Context(tls=)` | The same argument. It is copied to the xpcshell as `NECKO_FIREFOX`. This xpcshell script does not read it, so the ClientHello stays the donor Firefox 159 profile |
 | WebCrypto SHA, AES-CBC, AES-GCM, HMAC, ECDSA, ECDH | CNG | CommonCrypto and Security.framework |
@@ -165,7 +165,8 @@ Reviewed against upstream 0.2.1. A row marked "same source" is unfinished on bot
 | COLR and CPAL | Version 0, palette 0 | Version 0, palette 0. Table bytes come from `CTFontCopyTable` |
 | Glyph gamma | DirectWrite rendering mode | `SystemTextGamma` is 1.8 and `SystemTextContrast` is 1.0. `gasp` and `maxp` are readable |
 | WebTransport | Shared C++. `webtransport_worker.py` is absent from the tree | Same sources. A live session uses the HTTP/3 path in the row above |
-| WebCodecs, audio decode, WebGPU, iframe navigation, customized built-ins, XML, form target | Same source | Interface only, or an explicit unimplemented error |
+| iframe document load | Shared source. Necko ticks map through QueryPerformanceCounter | Same source. Ticks map through `steady_clock` milliseconds, as in `page_navigation.cpp`. One iframe document returned status 200 and `h2` |
+| WebCodecs, audio decode, WebGPU, customized built-ins, XML, form target | Same source | Interface only, or an explicit unimplemented error |
 | DataDome homepage | Server score | Server score. The example pass condition is unchanged |
 | Install | PyPI `win_amd64` wheel for 0.2.1 | The previous local `macosx_26_0_arm64` wheel was not rebuilt. `runtime.json` leaves `macos.url` empty. Its macOS size and sha256 describe that older zip, not this 0.2.1 shell |
 | C ABI client | DLL beside the shell | `libruyijs_client.dylib` install name `@rpath/libruyijs_client.dylib`, rpath `@executable_path`. XUL, xpcshell, and NSS names stay as Firefox wrote them |
