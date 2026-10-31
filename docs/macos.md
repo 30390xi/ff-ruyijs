@@ -1,6 +1,6 @@
 # macOS arm64
 
-This is the maintainer path for the macOS shell. Windows x64 still installs from the PyPI wheel. macOS builds a local `macosx_26_0_arm64` wheel after `dist/js` and `dist/libmozglue.dylib` exist. `runtime.json` then records that archive's size and sha256. Its macOS URL stays empty, and this tree does not upload the wheel.
+This is the maintainer path for the macOS shell. Windows x64 still installs from the PyPI wheel. macOS builds a `macosx_26_0_arm64` wheel after `dist/js` and `dist/libmozglue.dylib` exist. `runtime.json` records that archive's size, sha256, and fork-release URL. The wheel is not uploaded to PyPI.
 
 The same facts are written in [macos.zh-CN.md](macos.zh-CN.md).
 
@@ -10,7 +10,7 @@ The shared Python API, DOM, clock, and page logic stay one source tree. macOS ad
 
 - Same API: JS contexts, DOM, the Python bridge, WebCrypto algorithms, and the static image formats.
 - Acceptable platform differences: a named pipe or a Unix socket, CNG or CommonCrypto, WIC or ImageIO, DirectWrite or Core Text. GIF disposal, glyph gamma, and CJK fallback follow the system decoder. They are not pixel-identical to Windows.
-- Still outside this port: the socket process stays off. Turning it on makes this xpcshell exit with signal 11 and write an empty log. Direct HTTPS follows `Context(tls=)` through `libnecko_core.dylib` for ClientHello counts and for the 0.2.1 header and HTTP/2 settings table. Pages were rechecked for 100 and 159. Eight boundary versions were library GETs, not pages. A proxy stays on xpcshell and was not retested. DNS, connect, and TLS timing slots stay 0. There is no macOS PyPI wheel, and `macos.url` stays empty. Direct cleartext and HTTP/3 are in `docs/closed-route.zh-CN.md`.
+- Still outside this port: the socket process stays off. Turning the prefs on makes this xpcshell exit with signal 11 while filling Mac sandbox parameters. The donor `plugin-container.app` is produced by building `ipc/app`. Direct HTTPS follows `Context(tls=)` through `libnecko_core.dylib` for ClientHello counts and for the 0.2.1 header and HTTP/2 settings table. Pages were rechecked for 100 and 159. Eight boundary versions were library GETs, not pages. A proxy stays on xpcshell and was not retested. DNS, connect, and TLS timing slots stay 0. There is no PyPI macOS wheel. `macos.url` is the fork release zip. Direct cleartext and HTTP/3 are in `docs/closed-route.zh-CN.md`.
 
 ## What lives where
 
@@ -105,7 +105,7 @@ On Windows the same build copies only `oneshot.py`. If the Darwin venv is missin
 
 The shell binary is `dist/js`. Point examples at it with `RUYIJS_SHELL` set to that path, and put `python/` on `PYTHONPATH`. The client library is `libruyijs_client.dylib`.
 
-A local wheel is tagged `macosx_26_0_arm64`. It places the shell at `_runtime/dist/js` and copies the donor xpcshell closure to `_runtime/dist/necko`. It is not uploaded. Regenerate the archive with `python3.12 -B tools/macos_runtime.py <zip-path>`, then store the printed size and sha256 in the `runtime.json` `macos` object and leave `url` empty.
+A local wheel is tagged `macosx_26_0_arm64`. It places the shell at `_runtime/dist/js` and copies the donor xpcshell closure to `_runtime/dist/necko`, including `libnecko_quic.dylib` when that library exists. The wheel also includes `necko/closed_route.py`, `necko/core_client.py`, and `necko_win`. The wheel and `ruyijs-runtime-macos-arm64.zip` are on the maintainer fork release, not on PyPI. Regenerate the archive with `python3.12 -B tools/macos_runtime.py <zip-path>`, then store the printed size and sha256 in the `runtime.json` `macos` object together with the release URL.
 
 ## How a request moves
 
@@ -171,11 +171,11 @@ Reviewed against upstream `a626670`. That range includes the 0.2.1 shell, the CS
 | Font alias | The platform font list | `Osaka-Mono` maps to `Osaka` when the PostScript name and the family both match. That entry is Firefox's single-face list |
 | COLR and CPAL | Version 0, palette 0 | Version 0, palette 0. Table bytes come from `CTFontCopyTable` |
 | Glyph gamma | DirectWrite rendering mode | `SystemTextGamma` is 1.8 and `SystemTextContrast` is 1.0. `gasp` and `maxp` are readable |
-| WebTransport | Shared C++ frames. The helper modules are in the tree. A 0.2.1 install still uses `necko._http3.Connection` and `necko_quic.dll` | Same frames on `libnecko_quic.dylib`. `webtransport=true` only on the long-lived session. Ordinary HTTP/3 stays `webtransport=False`. Hashes stay ECDSA P-256 and at most 14 days. The page shell launched `oneshot --webtransport` against local `127.0.0.1:9443`: negotiated, status 200, and datagram `ping` echoed. Without hashes, PKI verification failed. This is not a 60-version QUIC ClientHello switch |
+| WebTransport | Shared C++ frames. The helper modules are in the tree. A 0.2.1 install still uses `necko._http3.Connection` and `necko_quic.dll` | Same frames on `libnecko_quic.dylib`. `webtransport=true` only on the long-lived session. Ordinary HTTP/3 stays `webtransport=False`. Hashes stay ECDSA P-256 and at most 14 days. The page shell launched `oneshot --webtransport` against local `127.0.0.1:9443`: negotiated, status 200, and datagram `ping` echoed. Without hashes, PKI verification failed. QUIC ClientHello follows the 100-159 fork points. Local Initial counts matched. Records are not byte-identical, and there is no JA3. |
 | iframe document load | Shared source. Necko ticks map through QueryPerformanceCounter | Same source. Ticks map through `steady_clock` milliseconds, as in `page_navigation.cpp`. One iframe document returned status 200 and `h2` |
 | WebCodecs, audio decode, WebGPU, customized built-ins, XML, form target | Same source | Interface only, or an explicit unimplemented error |
 | DataDome homepage | Server score | Server score. The example pass condition is unchanged |
-| Install | PyPI `win_amd64` wheel for 0.2.1 | The previous local `macosx_26_0_arm64` wheel was not rebuilt. `runtime.json` leaves `macos.url` empty. Its macOS size and sha256 describe that older zip, not this 0.2.1 shell |
+| Install | PyPI `win_amd64` wheel for 0.2.1 | `macosx_26_0_arm64` wheel and `ruyijs-runtime-macos-arm64.zip` are on the fork release `v0.2.1`. `runtime.json` `macos.url` points at that zip. They are not on PyPI |
 | C ABI client | DLL beside the shell | `libruyijs_client.dylib` install name `@rpath/libruyijs_client.dylib`, rpath `@executable_path`. XUL, xpcshell, and NSS names stay as Firefox wrote them |
 
 `image_wic.h` still contains a POSIX stub. macOS decode goes through ImageIO in `image_codec.cpp` and `image_gif.cpp`.
@@ -184,16 +184,16 @@ Reviewed against upstream `a626670`. That range includes the 0.2.1 shell, the CS
 
 The shell stays linked for `macosx_26_0_arm64`. Linux, Intel Macs, and macOS older than 26 stay outside this plan. New behavior comes from the Firefox donor or the system frameworks already linked: ImageIO, Core Text, Core Graphics, CommonCrypto, and Security.
 
-1. Local cleartext and HTTP/3 now use the Windows export names. The same-process proof passed twice, and public `quic.nginx.org` returned version 30 on the second request. The socket process stays off; turning it on still makes this xpcshell exit with signal 11 and write an empty log. WebTransport now uses that same library for one long-lived session. The page shell launched `oneshot --webtransport` against a local echo at `127.0.0.1:9443`: negotiated, status 200, and the datagram `ping` echoed. Without certificate hashes, PKI verification of that certificate failed. A page request without `--session` does not keep the `Alt-Svc` cache. That process boundary comes from the shared oneshot.
+1. Local cleartext and HTTP/3 now use the Windows export names. The same-process proof passed twice, and public `quic.nginx.org` returned version 30 on the second request. The socket process stays off. Turning the prefs on still makes this xpcshell exit with signal 11 while filling Mac sandbox parameters. WebTransport now uses that same library for one long-lived session. The page shell launched `oneshot --webtransport` against a local echo at `127.0.0.1:9443`: negotiated, status 200, and the datagram `ping` echoed. Without certificate hashes, PKI verification of that certificate failed. A page request without `--session` does not keep the `Alt-Svc` cache. That process boundary comes from the shared oneshot.
 2. TLS profiles. Direct HTTPS follows `tls=` for ClientHello counts and for the product header and HTTP/2 settings table. Pages were rechecked for 100 and 159. Record length is not byte-identical. Do not add a JA3 switch.
 3. C client install name is done. `otool -D` prints `@rpath/libruyijs_client.dylib`, and the rpath is `@executable_path`.
 4. Image pixels. Keep ImageIO. A fixture can record the GIF background difference. Change pixels only when ImageIO already exposes the matching disposal.
 5. Font aliases. `Osaka-Mono` to `Osaka` is the only Mac alias. Mac family selection stays the Core Text cascade. The upstream pref-lang, SimSun, and Arial lists stay on the Windows side of `font_collection.cpp`. The Windows cache separator stays the source escape `'\0'`, so the file stays text.
-6. Publish. Leave `runtime.json` `macos.url` empty. The zip recorded there is the previous shell, not 0.2.1, and this round does not rebuild the wheel or the zip. COLRv1, Linux, Intel Macs, and macOS older than 26 stay out.
+6. Publish. `runtime.json` `macos.url` is the fork release zip for `v0.2.1`. The same release holds `ruyijs-0.2.1-py3-none-macosx_26_0_arm64.whl`. Neither file is on PyPI. A clean install imported. Direct HTTPS returned status 200 and version 20. A local HTTP/3 second request returned status 200 and version 30. `libnecko_quic.dylib` loaded from the packaged `dist/necko` directory. COLRv1, Linux, Intel Macs, and macOS older than 26 stay out.
 
 ## What not to commit
 
-Do not commit the Firefox tree, either objdir, `dist/js`, the helper venv, the macOS runtime zip, `libnecko_quic.dylib`, `neqo-server`, `native/necko_quic/Cargo.lock`, cookies, tokens, proxy credentials, or response bodies. The macOS `runtime.json` object may store size and sha256. Leave its URL empty until a real download exists.
+Do not commit the Firefox tree, either objdir, `dist/js`, the helper venv, the macOS runtime zip, `libnecko_quic.dylib`, `neqo-server`, `native/necko_quic/Cargo.lock`, cookies, tokens, proxy credentials, or response bodies. The macOS `runtime.json` object stores size, sha256, and the fork-release URL. Do not commit the zip itself.
 
 ## Reporting a macOS issue
 

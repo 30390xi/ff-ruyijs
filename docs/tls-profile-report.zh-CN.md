@@ -129,9 +129,9 @@ oneshot 对没有代理的 `https` 使用这个库，代理和其他协议仍创
 
 ## 这一轮补上的行为
 
-请求头和 HTTP/2 设置改用 0.2.1 wheel 的 `_firefox.py`，文件在 `necko_win/_firefox.py`。调用方没写的头按 `tls=` 补上，调用方写了的头优先。SETTINGS、优先级树开关和 HPACK 编码器策略跟着这份表。表里的 HTTP/3 字段由 `libnecko_quic` 读取，不写进 TLS ClientHello，也没有拷整份 `_http3.py`。细节见 `docs/closed-route.zh-CN.md`。`wire_fields.py` 不在 Mac 树上，导入失败时继续。表里的 User-Agent 仍是 wheel 的 Windows 字符串。
+请求头和 HTTP/2 设置改用 0.2.1 wheel 的 `_firefox.py`，文件在 `necko_win/_firefox.py`。调用方没写的头按 `tls=` 补上，调用方写了的头优先。SETTINGS、优先级树开关和 HPACK 编码器策略跟着这份表。测量时表里的 HTTP/3 字段由 `libnecko_quic` 读取，不写进 TLS ClientHello，也没有拷整份 `_http3.py`。后来的 `libnecko_quic` 会把这些字段写进 QUIC ClientHello，TCP 的 ClientHello 仍然不收。细节见 `docs/closed-route.zh-CN.md`。`wire_fields.py` 不在 Mac 树上，导入失败时继续。表里的 User-Agent 仍是 wheel 的 Windows 字符串。
 
-库查找：环境变量优先；否则先 `dist/necko_tls/libnecko_core.dylib`，再 `dist/necko/libnecko_core.dylib`。暂存目录里的 NSS 同级库本来就在 `dist/necko`。没有重打压缩包，`macos.url` 仍为空。
+库查找：环境变量优先；否则先 `dist/necko_tls/libnecko_core.dylib`，再 `dist/necko/libnecko_core.dylib`。暂存目录里的 NSS 同级库本来就在 `dist/necko`。测量时没有重打压缩包，`macos.url` 当时为空。后来重打了压缩包，`macos.url` 指向维护者 fork 的 Release。
 
 ALPN 为 `http/1.1` 时，同一条套接字写 HTTP/1.1。解析器的单元测试覆盖了 Content-Length、分块正文和跳过的 1xx。这次测量没有对活的 HTTP/1.1 源打开过。后来的直连 TLS 检查打开了 `https://www.gnu.org/`，状态 200，版本码 11。页面烟雾测试仍是 `h2`。
 
@@ -139,7 +139,7 @@ ALPN 为 `http/1.1` 时，同一条套接字写 HTTP/1.1。解析器的单元测
 
 证书校验失败不回退。`https://expired.badssl.com/` 经路由抛出 `SSLCertVerificationError`，失败种类是 `verify`，没有状态码。客户端证书在连接前就表示不了，路由才会回退。没有活的客户端证书服务。
 
-八个簇边界的库内 GET（100、119、132、135、151、154、156、159）都是状态 200、ALPN `h2`，个数与配置表一致。156 的后量子签名只在 HTTP/3 表里，不写进 TLS ClientHello。TCP 握手仍是 156–159 那一组。页面只复查了 100 和 159，都是状态 200、协议 `h2`、`readyState` complete，xpcshell 进程数为 0。159 的个数是 15/5/3，100 是 17/6/2。
+八个簇边界的库内 GET（100、119、132、135、151、154、156、159）都是状态 200、ALPN `h2`，个数与配置表一致。测量时 156 的后量子签名只在 HTTP/3 表里，不写进 TCP ClientHello。TCP 握手仍是 156–159 那一组。后来的 QUIC ClientHello 会按那份表带上这组签名。页面只复查了 100 和 159，都是状态 200、协议 `h2`、`readyState` complete，xpcshell 进程数为 0。159 的个数是 15/5/3，100 是 17/6/2。
 
 这份报告测量时，明文 `http://example.com/` 会返回 `necko 804b0033`（`NS_ERROR_UNKNOWN_SOCKET_TYPE`）。当时没有加明文栈，也没有打开 socket process。现在的直连明文走 `libnecko_core` 的 `necko_socket_*` / `necko_exchange_*`。请求若仍落到 donor xpcshell，还是 `804b0033`。细节见 `docs/closed-route.zh-CN.md`。`RUYIJS_HTTP_PROXY` 这次没有设置，代理路径没有重测。
 
