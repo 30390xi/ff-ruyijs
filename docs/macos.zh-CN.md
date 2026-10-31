@@ -1,6 +1,6 @@
 # macOS arm64 维护说明
 
-这是 Mac 外壳的维护路径。Windows x64 仍然从 PyPI wheel 安装。macOS 在本机已经有 `dist/js` 和 `dist/libmozglue.dylib` 之后，可以打出 `macosx_26_0_arm64` wheel。`runtime.json` 记下这份压缩包的大小、sha256 和维护者 fork Release 的 URL。这个 wheel 不上传到 PyPI。
+从 0.3.0 起，`macosx_26_0_arm64` wheel 已发布到 PyPI。它由 GitHub Actions 从 `firefox/` 子模块构建（`.github/workflows/build-macos.yml`）：SpiderMonkey、Skia 和 NSS 来自这份源码，`libnecko_core.dylib` 和 `libnecko_quic.dylib` 链接这份 NSS。这个 wheel 不带 xpcshell，所以不能使用代理。下面的 donor 树路径是带 xpcshell 的维护者构建。
 
 同一份事实的英文版在 [macos.md](macos.md)。
 
@@ -10,7 +10,7 @@ Python API、DOM、时钟和页面逻辑仍是同一份源码。macOS 增加的�
 
 - 同一套 API：JS 上下文、DOM、Python 桥、WebCrypto 算法，以及静态图格式。
 - 可以接受的平台差异：命名管道或 Unix socket，CNG 或 CommonCrypto，WIC 或 ImageIO，DirectWrite 或 Core Text。GIF disposal、字形 gamma 和中文回退跟随系统解码器，不要求与 Windows 像素一致。
-- 这次仍不做：socket process 保持关闭。只打开偏好时，这份 xpcshell 在填写 Mac sandbox 参数时以信号 11 退出。donor 的 `plugin-container.app` 由编 `ipc/app` 得到。直连 HTTPS 经 `libnecko_core.dylib` 跟随 `Context(tls=)`，握手个数和 0.2.1 的请求头、HTTP/2 设置表都跟着走。页面复查了 100 和 159。八个边界版本是库内 GET，不是页面。代理仍走 xpcshell，这次没有重测。DNS、连接和 TLS 计时保持 0。没有 PyPI 上的 macOS wheel。`macos.url` 指向 fork Release 里的压缩包。直连明文和 HTTP/3 写在 `docs/closed-route.zh-CN.md`。
+- 这次仍不做：socket process 保持关闭。只打开偏好时，这份 xpcshell 在填写 Mac sandbox 参数时以信号 11 退出。donor 的 `plugin-container.app` 由编 `ipc/app` 得到。直连 HTTPS 经 `libnecko_core.dylib` 跟随 `Context(tls=)`，握手个数和 0.2.1 的请求头、HTTP/2 设置表都跟着走。页面复查了 100 和 159。八个边界版本是库内 GET，不是页面。代理仍走 xpcshell，这次没有重测。DNS、连接和 TLS 计时保持 0。PyPI 上的 wheel 不带 xpcshell。`macos.url` 指向 fork Release 里的压缩包。直连明文和 HTTP/3 写在 `docs/closed-route.zh-CN.md`。
 
 ## 各部分放在哪
 

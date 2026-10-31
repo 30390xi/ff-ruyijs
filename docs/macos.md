@@ -1,6 +1,6 @@
 # macOS arm64
 
-This is the maintainer path for the macOS shell. Windows x64 still installs from the PyPI wheel. macOS builds a `macosx_26_0_arm64` wheel after `dist/js` and `dist/libmozglue.dylib` exist. `runtime.json` records that archive's size, sha256, and fork-release URL. The wheel is not uploaded to PyPI.
+Since 0.3.0 the `macosx_26_0_arm64` wheel is on PyPI. GitHub Actions builds it from the `firefox/` submodule (`.github/workflows/build-macos.yml`): SpiderMonkey, Skia and NSS come from that source, and `libnecko_core.dylib` and `libnecko_quic.dylib` are linked against that NSS. It has no xpcshell, so a proxy is not available in that wheel. The donor-tree path below is the maintainer build that includes xpcshell.
 
 The same facts are written in [macos.zh-CN.md](macos.zh-CN.md).
 
@@ -10,7 +10,7 @@ The shared Python API, DOM, clock, and page logic stay one source tree. macOS ad
 
 - Same API: JS contexts, DOM, the Python bridge, WebCrypto algorithms, and the static image formats.
 - Acceptable platform differences: a named pipe or a Unix socket, CNG or CommonCrypto, WIC or ImageIO, DirectWrite or Core Text. GIF disposal, glyph gamma, and CJK fallback follow the system decoder. They are not pixel-identical to Windows.
-- Still outside this port: the socket process stays off. Turning the prefs on makes this xpcshell exit with signal 11 while filling Mac sandbox parameters. The donor `plugin-container.app` is produced by building `ipc/app`. Direct HTTPS follows `Context(tls=)` through `libnecko_core.dylib` for ClientHello counts and for the 0.2.1 header and HTTP/2 settings table. Pages were rechecked for 100 and 159. Eight boundary versions were library GETs, not pages. A proxy stays on xpcshell and was not retested. DNS, connect, and TLS timing slots stay 0. There is no PyPI macOS wheel. `macos.url` is the fork release zip. Direct cleartext and HTTP/3 are in `docs/closed-route.zh-CN.md`.
+- Still outside this port: the socket process stays off. Turning the prefs on makes this xpcshell exit with signal 11 while filling Mac sandbox parameters. The donor `plugin-container.app` is produced by building `ipc/app`. Direct HTTPS follows `Context(tls=)` through `libnecko_core.dylib` for ClientHello counts and for the 0.2.1 header and HTTP/2 settings table. Pages were rechecked for 100 and 159. Eight boundary versions were library GETs, not pages. A proxy stays on xpcshell and was not retested. DNS, connect, and TLS timing slots stay 0. The PyPI wheel has no xpcshell. `macos.url` is the fork release zip. Direct cleartext and HTTP/3 are in `docs/closed-route.zh-CN.md`.
 
 ## What lives where
 
