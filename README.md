@@ -327,3 +327,14 @@ Mozilla-derived code (SpiderMonkey, Necko) stays under the MPL-2.0. Releases up 
 See [`NOTICE`](NOTICE) for third-party attributions.
 
 If ff-ruyijs saved you from reimplementing a browser, a ⭐ helps others find it.
+
+## 🤝 Contributors
+
+Thanks to everyone who has opened a pull request:
+
+<table>
+<tr>
+<td align="center" width="150"><a href="https://github.com/Facetomyself"><img src="https://avatars.githubusercontent.com/u/103901201?v=4" width="80" height="80" alt="Facetomyself"><br><b>Facetomyself</b></a><br><sub><a href="https://github.com/cutetailbud/ff-ruyijs/pull/4">#4 macOS arm64 shell</a></sub></td>
+<td align="center" width="150"><a href="https://github.com/Starktomy"><img src="https://avatars.githubusercontent.com/u/37720599?v=4" width="80" height="80" alt="Starktomy"><br><b>Starktomy</b></a><br><sub><a href="https://github.com/cutetailbud/ff-ruyijs/pull/5">#5 Linux runtime</a></sub></td>
+</tr>
+</table>

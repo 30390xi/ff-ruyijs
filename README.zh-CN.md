@@ -327,3 +327,14 @@ ff-ruyijs 采用**双许可**：
 第三方声明见 [`NOTICE`](NOTICE)。
 
 如果 ff-ruyijs 帮你省下了重写一个浏览器的功夫，点个 ⭐ 能让更多人发现它。
+
+## 🤝 贡献者
+
+感谢每一位提交 Pull Request 的贡献者：
+
+<table>
+<tr>
+<td align="center" width="150"><a href="https://github.com/Facetomyself"><img src="https://avatars.githubusercontent.com/u/103901201?v=4" width="80" height="80" alt="Facetomyself"><br><b>Facetomyself</b></a><br><sub><a href="https://github.com/cutetailbud/ff-ruyijs/pull/4">#4 macOS arm64 外壳</a></sub></td>
+<td align="center" width="150"><a href="https://github.com/Starktomy"><img src="https://avatars.githubusercontent.com/u/37720599?v=4" width="80" height="80" alt="Starktomy"><br><b>Starktomy</b></a><br><sub><a href="https://github.com/cutetailbud/ff-ruyijs/pull/5">#5 Linux 运行时</a></sub></td>
+</tr>
+</table>
