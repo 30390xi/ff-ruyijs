@@ -1,13 +1,18 @@
 """Necko/NSS session for the worker frames.
 
 Direct HTTPS uses libnecko_core when that library reports NSS 3.131.
-A proxy and any non-HTTPS URL keep the donor xpcshell. A request the
-library cannot represent falls back for that request only. Certificate
+Direct cleartext HTTP uses the recovered socket and HTTP/1 exchange.
+A response Alt-Svc h3 entry is remembered for that origin. The next
+direct request uses necko_quic and the linked Neqo client. A proxy, and
+any other non-HTTPS URL, keeps the donor xpcshell. A request the library
+cannot represent falls back for that request only. Certificate
 verification failures stay on the library path. This process does not
-store cookies and does not follow redirects.
+store cookies, does not follow redirects, and does not turn the socket
+process on.
 """
 
 import os
+import time
 from urllib.parse import urlsplit
 
 from necko.client import NeckoClient
@@ -27,6 +32,42 @@ class RoutingClient:
         self._core = None
         self._core_failed = False
         self._fallback = None
+        self._alternatives = {}
+
+    def _origin_key(self, parts):
+        return (parts.scheme, parts.hostname, parts.port)
+
+    def _alternative(self, parts):
+        key = self._origin_key(parts)
+        cached = self._alternatives.get(key)
+        if cached is None:
+            return None
+        host, port, expiry = cached
+        if time.monotonic() >= expiry:
+            self._alternatives.pop(key, None)
+            return None
+        return host, port
+
+    def _remember(self, parts, response):
+        raw = getattr(response, "raw", None)
+        header_list = getattr(getattr(raw, "headers", None), "_list", None)
+        if not header_list:
+            return
+        value = ""
+        for name, item in header_list:
+            if str(name).lower() == "alt-svc":
+                value = str(item)
+        if not value:
+            return
+        from necko.closed_route import remember_alternative
+
+        outcome = remember_alternative(value, parts.hostname)
+        key = self._origin_key(parts)
+        if outcome[0] == "clear":
+            self._alternatives.pop(key, None)
+        elif outcome[0] == "set":
+            _kind, host, port, age = outcome
+            self._alternatives[key] = (host, port, time.monotonic() + age)
 
     def _xpcshell(self):
         if self._fallback is None:
@@ -39,6 +80,9 @@ class RoutingClient:
         if self._core is not None:
             return self._core
         try:
+            from necko.closed_route import _ensure_necko_win
+
+            _ensure_necko_win()
             from necko.core_client import CoreClient
 
             core = CoreClient()
@@ -54,8 +98,18 @@ class RoutingClient:
 
     def fetch(self, method, url, headers, body, budget_s):
         parts = urlsplit(url)
+        proxied = bool(os.environ.get("RUYIJS_HTTP_PROXY"))
+        if not proxied and parts.hostname:
+            from necko.closed_route import cleartext_fetch, http3_fetch
+
+            if parts.scheme == "http":
+                return cleartext_fetch(method, url, headers, body, budget_s)
+            if parts.scheme == "https":
+                endpoint = self._alternative(parts)
+                if endpoint is not None:
+                    return http3_fetch(method, url, headers, body, budget_s, endpoint)
         use_core = (
-            not os.environ.get("RUYIJS_HTTP_PROXY")
+            not proxied
             and parts.scheme == "https"
             and bool(parts.hostname)
         )
@@ -72,6 +126,8 @@ class RoutingClient:
             served = self._xpcshell()
             response = served.fetch(method, url, headers, body, budget_s)
         self.last_hello = getattr(served, "last_hello", b"") or b""
+        if use_core and served is client and parts.scheme == "https":
+            self._remember(parts, response)
         return response
 
     def close(self):

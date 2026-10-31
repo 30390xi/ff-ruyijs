@@ -177,6 +177,13 @@ class Context:
                     content = candidate.read_bytes()
                     if b"-----BEGIN CERTIFICATE-----" in content:
                         roots.extend(x509.load_pem_x509_certificates(content))
+            extra = os.environ.get("NECKO_EXTRA_CA", "")
+            if extra and not isinstance(verify, (str, os.PathLike)):
+                extra_path = Path(extra)
+                if extra_path.is_file():
+                    content = extra_path.read_bytes()
+                    if b"-----BEGIN CERTIFICATE-----" in content:
+                        roots.extend(x509.load_pem_x509_certificates(content))
             self.store = Store(roots)
             trust = b"".join(_certificate_bytes(root) for root in roots)
             if not isinstance(verify, (str, os.PathLike)):

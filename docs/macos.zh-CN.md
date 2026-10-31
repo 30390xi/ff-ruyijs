@@ -10,7 +10,7 @@ Python API、DOM、时钟和页面逻辑仍是同一份源码。macOS 增加的�
 
 - 同一套 API：JS 上下文、DOM、Python 桥、WebCrypto 算法，以及静态图格式。
 - 可以接受的平台差异：命名管道或 Unix socket，CNG 或 CommonCrypto，WIC 或 ImageIO，DirectWrite 或 Core Text。GIF disposal、字形 gamma 和中文回退跟随系统解码器，不要求与 Windows 像素一致。
-- 这次移植不做：socket process 关闭时 HTTP/3 停在版本码 20。直连 HTTPS 经 `libnecko_core.dylib` 跟随 `Context(tls=)`，握手个数和 0.2.1 的请求头、HTTP/2 设置表都跟着走。页面复查了 100 和 159。八个边界版本是库内 GET，不是页面。这份表里的 HTTP/3 字段不用。代理仍走 xpcshell，这次没有重测。明文 HTTP 仍从 donor 返回 `necko 804b0033`。DNS、连接和 TLS 计时保持 0。没有 macOS 的 PyPI wheel，`macos.url` 保持为空。
+- 这次仍不做：socket process 保持关闭。打开后这份 xpcshell 以信号 11 退出，日志是空的。直连 HTTPS 经 `libnecko_core.dylib` 跟随 `Context(tls=)`，握手个数和 0.2.1 的请求头、HTTP/2 设置表都跟着走。页面复查了 100 和 159。八个边界版本是库内 GET，不是页面。代理仍走 xpcshell，这次没有重测。DNS、连接和 TLS 计时保持 0。没有 macOS 的 PyPI wheel，`macos.url` 保持为空。直连明文和 HTTP/3 写在 `docs/closed-route.zh-CN.md`。
 
 ## 各部分放在哪
 
@@ -19,8 +19,9 @@ macOS 上的 ruyijs 只做外壳。SpiderMonkey 和 Necko/NSS 来自同一份官
 | 部分 | 来源 |
 | --- | --- |
 | `dist/js`、`dist/libmozglue.dylib` | SpiderMonkey standalone donor，再经 `tools/build.py` |
-| Necko/NSS 回退、代理、非 HTTPS | 浏览器 donor 编出的 `xpcshell` |
-| `libnecko_core.dylib` | `native/necko_tls/`，链到 donor NSS 3.131。直连 HTTPS。查找顺序是 `dist/necko_tls`，然后 `dist/necko` |
+| Necko/NSS 回退与代理 | 浏览器 donor 编出的 `xpcshell` |
+| `libnecko_core.dylib` | `native/necko_tls/`，链到 donor NSS 3.131。直连 HTTPS，以及明文套接字和 HTTP/1 交换。查找顺序是 `dist/necko_tls`，然后 `dist/necko` |
+| `libnecko_quic.dylib` | `native/necko_quic/`，使用 Firefox 159 vendor 里的 Neqo 0.32.0，链到 donor NSS 3.131。Darwin 上用 `tools/build_necko_quic.py` 编译。这个 dylib 不提交 |
 | 帧管道、进程启动、C ABI 客户端 | 本仓库 |
 | Python helper venv | `vendor/necko-derived/python`，已被 gitignore。wheel 使用安装它的那个 Python |
 
@@ -103,9 +104,9 @@ Windows 上同一次构建只复制 `oneshot.py`。Darwin 的 venv 不存在时�
 
 ## 一次请求怎么走
 
-长度前缀帧和 Windows 相同。macOS 上的管道是 Unix socket。外壳启动 `python -I -B -m ruyijs_necko.oneshot`。直连 HTTPS 使用 `libnecko_core.dylib`。ALPN `h2` 使用产品的 HTTP/2 设置。ALPN 为 `http/1.1` 时在这条套接字上写 HTTP/1.1。其他 ALPN 表示不了，路由可以回退。代理或非 HTTPS 在该请求上保留 xpcshell。证书校验失败不回退。不保存 cookie。`redirectionLimit` 仍是 0，xpcshell 路径上也是，所以 3xx 就作为这次的响应返回。同一个 helper 进程里，同源 HTTP/2 可以复用一条连接。页面外壳仍是每个请求启动一次 oneshot，除非使用 `--session`。
+长度前缀帧和 Windows 相同。macOS 上的管道是 Unix socket。外壳启动 `python -I -B -m ruyijs_necko.oneshot`。直连 HTTPS 使用 `libnecko_core.dylib`。ALPN `h2` 使用产品的 HTTP/2 设置。ALPN 为 `http/1.1` 时在这条套接字上写 HTTP/1.1。其他 ALPN 表示不了，路由可以回退。代理在该请求上保留 xpcshell。直连 `http://` 走 `libnecko_core` 里的套接字和 HTTP/1 交换。直连 `https://` 走 `libnecko_core`，直到同一进程记住了响应里的 `Alt-Svc`，下一次到该来源的请求才走 `libnecko_quic`。证书校验失败不回退。不保存 cookie。`redirectionLimit` 仍是 0，xpcshell 路径上也是，所以 3xx 就作为这次的响应返回。同一个 helper 进程里，同源 HTTP/2 可以复用一条连接。页面外壳仍是每个请求启动一次 oneshot，除非使用 `--session`。
 
-直连 HTTPS 的页面验收过 HTTP/2，版本码 20，覆盖 100 和 159。这条套接字上的 HTTP/1.1 做过单元测试，没有对活的源打开过。更早的 xpcshell 路径也曾返回 HTTP/1.1。donor 的 XUL 里有 neqo，偏好名是 `network.http.http3.enable`。socket process 保持关闭时，对一个支持 HTTP/3 的源发两次请求，版本码仍是 20。打开 socket process 后，这份 xpcshell 会关掉管道，并且不写错误。不要再写一套 HTTP/3。明文 `http://example.com/` 仍从这份 donor 返回 `necko 804b0033`。
+直连 HTTPS 的页面验收过 HTTP/2，版本码 20，覆盖 100 和 159。这条套接字上的 HTTP/1.1 做过单元测试，没有对活的源打开过。更早的 xpcshell 路径也曾返回 HTTP/1.1。直连明文和 HTTP/3 使用与 Windows DLL 相同的导出。本机 HTTP/1.1 返回状态 200、版本码 11。本机 Neqo 服务器在记住响应 `Alt-Svc` 之后，第二次请求返回版本码 30。第二次请求的证书不受信任时失败，状态不是 200。公网 `quic.nginx.org` 同样从版本码 20 到 30，两次正文一致。`cloudflare.com` 没有下发 `Alt-Svc`，两次都停在版本码 20。请求如果落到 donor xpcshell，明文仍会返回 `necko 804b0033`。打开 socket process 后，这份 xpcshell 会关掉管道，并且不写错误。不要再写一套 QUIC。
 
 ## 系统框架
 
@@ -152,8 +153,8 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 | 表面 | Windows | macOS |
 | --- | --- | --- |
 | JS 上下文、DOM、指纹、时钟、Python 桥 | 已实现 | 同一套 API |
-| Necko HTTP/1.1 与 HTTP/2 | 已实现 | 这一轮直连 HTTPS 页面在 100 和 159 都返回状态 200、版本码 20（`h2`）。ALPN 为 `http/1.1` 时写 HTTP/1.1。解析器做过单元测试。没有对活的 HTTP/1.1 源打开过。明文 `http://example.com/` 仍从 xpcshell 返回 `necko 804b0033` |
-| HTTP/3 | README 把它写进 Necko 传输 | donor 的 XUL 含有 neqo。socket process 关闭时，直连的两次请求在响应带上 `h3` 的 `alt-svc` 之后仍是版本码 20。打开后这只 xpcshell 以信号 11 退出，日志是空的。没有加偏好设置 |
+| Necko HTTP/1.1 与 HTTP/2 | 已实现 | 这一轮直连 HTTPS 页面在 100 和 159 都返回状态 200、版本码 20（`h2`）。ALPN 为 `http/1.1` 时写 HTTP/1.1。解析器做过单元测试。没有对活的 HTTP/1.1 源打开过。直连明文走收回的 HTTP/1 交换，本机服务返回状态 200、版本码 11。xpcshell 自己仍会返回 `necko 804b0033` |
+| HTTP/3 | `necko_quic.dll` 与 Neqo 0.32.0 | `libnecko_quic.dylib` 使用 Firefox 159 的 Neqo 0.32.0 和 donor NSS 3.131。同一进程的证明：第一次响应版本码 11，记住响应 `Alt-Svc` 后第二次是版本码 30。错误证书失败。公网 `quic.nginx.org` 从版本码 20 到 30，正文一致。socket process 保持关闭。页面外壳默认每个请求启动一次 oneshot，除非使用 `--session`，所以缓存不会跨过这些进程 |
 | TLS 配置 100–159 | `Context(tls=)` | 直连 HTTPS 走 `libnecko_core.dylib`。页面 100 和 159 跟着配置个数：100 是 17 个套件、6 个组、2 个 key share，159 是 15、5、3。八个边界的库内 GET 与表一致，并返回 200 和 `h2`。没写的请求头和 HTTP/2 设置跟随 0.2.1 的表。没有把全部 60 个版本当页面打开（`docs/tls-profile.zh-CN.md`） |
 | WebCrypto：SHA、AES-CBC、AES-GCM、HMAC、ECDSA、ECDH | CNG | CommonCrypto 与 Security.framework |
 | 静态图：PNG、JPEG、GIF、WebP、BMP、ICO | WIC | ImageIO，预乘 BGRA |
@@ -178,8 +179,8 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 
 外壳按 `macosx_26_0_arm64` 链接。Linux、Intel Mac，以及低于 macOS 26 的系统不在这份计划里。新行为只接到已经在用的 Firefox donor 或系统框架：ImageIO、Core Text、Core Graphics、CommonCrypto、Security。
 
-1. HTTP/3 这一轮结束。socket process 关闭时，直连请求和紧接着的下一次都停在版本码 20，尽管响应已经通告 `h3`。打开 socket process 后，这只 xpcshell 以信号 11 退出，日志是空的。没有提交偏好，也没有加第二套 QUIC。WebTransport 仍要等真正的版本码 30。
-2. TLS 配置。直连 HTTPS 的握手个数，以及产品请求头和 HTTP/2 设置表，都跟着 `tls=`。页面复查了 100 和 159。还没做的是 HTTP/3，以及 donor 明文 HTTP 的套接字类型（`necko 804b0033`）。记录长度不要求逐字节相同。不要加 JA3 开关。
+1. 本机明文和 HTTP/3 已经走 Windows 的导出名字。同一进程的证明连续通过两遍，公网 `quic.nginx.org` 的第二次请求也是版本码 30。socket process 保持关闭；打开后这只 xpcshell 仍以信号 11 退出，日志是空的。WebTransport 仍要等版本码 30 上的真实会话。不用 `--session` 的页面请求不会保留 `Alt-Svc` 缓存。这个进程边界来自两边共用的 oneshot。
+2. TLS 配置。直连 HTTPS 的握手个数，以及产品请求头和 HTTP/2 设置表，都跟着 `tls=`。页面复查了 100 和 159。记录长度不要求逐字节相同。不要加 JA3 开关。
 3. C 客户端安装名已经完成。`otool -D` 打印 `@rpath/libruyijs_client.dylib`，rpath 是 `@executable_path`。
 4. 图像像素。继续用 ImageIO。可以用一条夹具记下 GIF 背景色差异。只有 ImageIO 已经提供对应 disposal 时才改像素。
 5. 字体别名。Mac 只保留 `Osaka-Mono` 到 `Osaka`。字体选择仍走 Core Text 回退。上游的语言偏好、SimSun 和 Arial 列表留在 `font_collection.cpp` 的 Windows 一侧。Windows 的缓存分隔符保持源码转义 `'\0'`，文件因此仍是文本。
@@ -187,7 +188,7 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 
 ## 不要提交的东西
 
-不要提交 Firefox 树、两份 objdir、`dist/js`、helper venv、macOS 运行时压缩包、cookie、token、代理凭据或响应正文。`runtime.json` 的 macOS 对象可以记下大小和 sha256。在真实下载地址出现之前，URL 保持为空。
+不要提交 Firefox 树、两份 objdir、`dist/js`、helper venv、macOS 运行时压缩包、`libnecko_quic.dylib`、`neqo-server`、`native/necko_quic/Cargo.lock`、cookie、token、代理凭据或响应正文。`runtime.json` 的 macOS 对象可以记下大小和 sha256。在真实下载地址出现之前，URL 保持为空。
 
 ## 报告 macOS 问题
 
@@ -196,3 +197,7 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 ## 维护方自己的 fork
 
 上游 `main` 仍是 Windows 发布线。在 macOS 维护方的 fork 上，修正先进入 `release/macos`，该 fork 的 `main` 再快进到同一提交。上游更新从 `release/macos` 拉出分支合并、审查，再合并回去，不直接合并进该 fork 的 `main`。
+
+## 闭源路线
+
+明文 HTTP 与 HTTP/3 的语义适配写在 `docs/closed-route.zh-CN.md`。socket process 仍然关闭。

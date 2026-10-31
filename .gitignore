@@ -19,6 +19,7 @@
 !/tools/generated/
 !/tools/binding_order.py
 !/tools/build.py
+!/tools/build_necko_quic.py
 !/tools/bootstrap_macos_helper.py
 !/tools/macos_runtime.py
 !/tools/client.py
@@ -45,6 +46,7 @@ __pycache__/
 !/vendor/image-native/
 !/vendor/urlpattern-native/
 /vendor/necko-native/**/*.dll
+/native/necko_quic/Cargo.lock
 *.py[cod]
 .pytest_cache/
 .mypy_cache/

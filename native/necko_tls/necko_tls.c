@@ -85,6 +85,10 @@ static int ensure_nss(void) {
         return 0;
     }
     PR_Init(PR_USER_THREAD, PR_PRIORITY_NORMAL, 0);
+    if (NSS_IsInitialized()) {
+        g_nss_ready = 1;
+        return 0;
+    }
     if (NSS_NoDB_Init(NULL) != SECSuccess) {
         set_nss_error("NSS_NoDB_Init");
         return -1;

@@ -10,7 +10,7 @@ The shared Python API, DOM, clock, and page logic stay one source tree. macOS ad
 
 - Same API: JS contexts, DOM, the Python bridge, WebCrypto algorithms, and the static image formats.
 - Acceptable platform differences: a named pipe or a Unix socket, CNG or CommonCrypto, WIC or ImageIO, DirectWrite or Core Text. GIF disposal, glyph gamma, and CJK fallback follow the system decoder. They are not pixel-identical to Windows.
-- Not in this port: HTTP/3 stays version 20 while the socket process is off. Direct HTTPS follows `Context(tls=)` through `libnecko_core.dylib` for ClientHello counts and for the 0.2.1 header and HTTP/2 settings table. Pages were rechecked for 100 and 159. Eight boundary versions were library GETs, not pages. HTTP/3 fields in that table are unused. A proxy stays on xpcshell and was not retested. Plain HTTP still returns `necko 804b0033` from the donor. DNS, connect, and TLS timing slots stay 0. There is no macOS PyPI wheel, and `macos.url` stays empty.
+- Still outside this port: the socket process stays off. Turning it on makes this xpcshell exit with signal 11 and write an empty log. Direct HTTPS follows `Context(tls=)` through `libnecko_core.dylib` for ClientHello counts and for the 0.2.1 header and HTTP/2 settings table. Pages were rechecked for 100 and 159. Eight boundary versions were library GETs, not pages. A proxy stays on xpcshell and was not retested. DNS, connect, and TLS timing slots stay 0. There is no macOS PyPI wheel, and `macos.url` stays empty. Direct cleartext and HTTP/3 are in `docs/closed-route.zh-CN.md`.
 
 ## What lives where
 
@@ -19,8 +19,9 @@ ruyijs on macOS is the outer shell. SpiderMonkey and Necko/NSS come from one off
 | Piece | Where it comes from |
 | --- | --- |
 | `dist/js`, `dist/libmozglue.dylib` | SpiderMonkey standalone donor, then `tools/build.py` |
-| Necko/NSS fallback, proxy, non-HTTPS | `xpcshell` from the browser donor |
-| `libnecko_core.dylib` | `native/necko_tls/`, linked to donor NSS 3.131. Direct HTTPS. Lookup is `dist/necko_tls`, then `dist/necko` |
+| Necko/NSS fallback and proxy | `xpcshell` from the browser donor |
+| `libnecko_core.dylib` | `native/necko_tls/`, linked to donor NSS 3.131. Direct HTTPS, plus the cleartext socket and HTTP/1 exchange. Lookup is `dist/necko_tls`, then `dist/necko` |
+| `libnecko_quic.dylib` | `native/necko_quic/`, Neqo 0.32.0 from the Firefox 159 vendor, linked to donor NSS 3.131. Darwin build is `tools/build_necko_quic.py`. The dylib is not committed |
 | Frame pipe, process launch, C ABI client | this repository |
 | Python helper venv | `vendor/necko-derived/python`, gitignored. A wheel uses the Python that installed it |
 
@@ -103,9 +104,9 @@ A local wheel is tagged `macosx_26_0_arm64`. It places the shell at `_runtime/di
 
 ## How a request moves
 
-The length-prefixed frame format is the same as Windows. On macOS the pipe is a Unix socket. The shell starts `python -I -B -m ruyijs_necko.oneshot`. Direct HTTPS uses `libnecko_core.dylib`. ALPN `h2` uses the product HTTP/2 settings. ALPN `http/1.1` writes HTTP/1.1 on that socket. Another ALPN is unwired, and the router may fall back. A proxy or a non-HTTPS URL keeps xpcshell for that request. Certificate verification failure does not fall back. Cookies are not stored. `redirectionLimit` stays 0, including on the xpcshell path, so a 3xx response is returned as the response. Inside one helper process, same-origin HTTP/2 can reuse one connection. The page shell still starts one oneshot per request unless `--session` is used.
+The length-prefixed frame format is the same as Windows. On macOS the pipe is a Unix socket. The shell starts `python -I -B -m ruyijs_necko.oneshot`. Direct HTTPS uses `libnecko_core.dylib`. ALPN `h2` uses the product HTTP/2 settings. ALPN `http/1.1` writes HTTP/1.1 on that socket. Another ALPN is unwired, and the router may fall back. A proxy keeps xpcshell for that request. Direct `http://` uses the socket and HTTP/1 exchange in `libnecko_core`. Direct `https://` uses `libnecko_core` until a remembered response `Alt-Svc` sends the next same-process request for that origin through `libnecko_quic`. Certificate verification failure does not fall back. Cookies are not stored. `redirectionLimit` stays 0, including on the xpcshell path, so a 3xx response is returned as the response. Inside one helper process, same-origin HTTP/2 can reuse one connection. The page shell still starts one oneshot per request unless `--session` is used.
 
-Verified on direct HTTPS pages: HTTP/2, version code 20, for 100 and 159. HTTP/1.1 on this socket was unit-tested and not opened against a live origin. The earlier xpcshell path had also returned HTTP/1.1. The donor XUL contains neqo and the preference `network.http.http3.enable`. With the socket process left off, two requests to an HTTP/3 origin still return version 20. Turning the socket process on makes this xpcshell close the pipe and write no error. Do not add another HTTP/3 stack. Plain `http://example.com/` still returns `necko 804b0033` from that donor.
+Verified on direct HTTPS pages: HTTP/2, version code 20, for 100 and 159. HTTP/1.1 on this socket was unit-tested and not opened against a live origin. The earlier xpcshell path had also returned HTTP/1.1. Direct cleartext and HTTP/3 use the same export names as the Windows DLLs. A local HTTP/1.1 server returned status 200 and version 11. A local Neqo server returned version 30 on the second request after the response `Alt-Svc` was remembered. A bad certificate on that second request failed and was not status 200. Public `quic.nginx.org` did the same: version 20, then version 30, with the same body. `cloudflare.com` did not send `Alt-Svc`, so both requests stayed version 20. The donor xpcshell still returns `necko 804b0033` for plain HTTP if a request reaches it. Turning the socket process on makes this xpcshell close the pipe and write no error. Do not add another QUIC stack.
 
 ## System frameworks
 
@@ -152,8 +153,8 @@ Reviewed against upstream `a626670`. That range includes the 0.2.1 shell, the CS
 | Surface | Windows | macOS |
 | --- | --- | --- |
 | JS context, DOM, fingerprint, clock, Python bridge | Implemented | Same API |
-| Necko HTTP/1.1 and HTTP/2 | Implemented | Direct HTTPS pages this round returned status 200 and version 20 (`h2`) for 100 and 159. HTTP/1.1 is written when ALPN is `http/1.1`. That parser was unit-tested. No live HTTP/1.1 origin was opened. Plain `http://example.com/` still returns `necko 804b0033` from xpcshell |
-| HTTP/3 | Part of the Necko transport described in the README | Donor XUL contains neqo. With the socket process off, two direct requests stayed version 20 after the response sent `alt-svc` for `h3`. With the socket process on, this xpcshell exits with signal 11 and the log stays empty. No preference was added |
+| Necko HTTP/1.1 and HTTP/2 | Implemented | Direct HTTPS pages this round returned status 200 and version 20 (`h2`) for 100 and 159. HTTP/1.1 is written when ALPN is `http/1.1`. That parser was unit-tested. No live HTTP/1.1 origin was opened. Direct cleartext uses the recovered HTTP/1 exchange and, on a local server, returned status 200 and version 11. xpcshell itself still returns `necko 804b0033` |
+| HTTP/3 | `necko_quic.dll` and Neqo 0.32.0 | `libnecko_quic.dylib` uses the Firefox 159 Neqo 0.32.0 crates and donor NSS 3.131. Same-process proof: first response version 11, second request version 30 after response `Alt-Svc`. A bad certificate failed. Public `quic.nginx.org` went from version 20 to version 30 with the same body. The socket process stays off. The page shell starts a new oneshot per request unless `--session` is used, so the cache does not cross those processes |
 | TLS profiles 100–159 | `Context(tls=)` | Direct HTTPS uses `libnecko_core.dylib`. Pages 100 and 159 followed the profile counts: 17 ciphers, 6 groups, and 2 key shares for 100, and 15, 5, and 3 for 159. Eight boundary library GETs matched the table and returned 200 and `h2`. Omitted headers and HTTP/2 settings follow the 0.2.1 table. Pages were not opened for all sixty versions (`docs/tls-profile.md`) |
 | WebCrypto SHA, AES-CBC, AES-GCM, HMAC, ECDSA, ECDH | CNG | CommonCrypto and Security.framework |
 | Still images: PNG, JPEG, GIF, WebP, BMP, ICO | WIC | ImageIO, premultiplied BGRA |
@@ -178,8 +179,8 @@ Reviewed against upstream `a626670`. That range includes the 0.2.1 shell, the CS
 
 The shell stays linked for `macosx_26_0_arm64`. Linux, Intel Macs, and macOS older than 26 stay outside this plan. New behavior comes from the Firefox donor or the system frameworks already linked: ImageIO, Core Text, Core Graphics, CommonCrypto, and Security.
 
-1. HTTP/3 is closed for this round. With the socket process off, a direct request and the one after it both stayed version 20, even though the response advertised `h3`. With the socket process on, this xpcshell exits with signal 11 and writes an empty log. No preference was committed, and no second QUIC stack was added. WebTransport stays behind a real version 30.
-2. TLS profiles. Direct HTTPS follows `tls=` for ClientHello counts and for the product header and HTTP/2 settings table. Pages were rechecked for 100 and 159. Remaining gaps are HTTP/3 and the donor plain-HTTP socket type (`necko 804b0033`). Record length is not byte-identical. Do not add a JA3 switch.
+1. Local cleartext and HTTP/3 now use the Windows export names. The same-process proof passed twice, and public `quic.nginx.org` returned version 30 on the second request. The socket process stays off; turning it on still makes this xpcshell exit with signal 11 and write an empty log. WebTransport still needs a live session on version 30. A page request without `--session` does not keep the `Alt-Svc` cache. That process boundary comes from the shared oneshot.
+2. TLS profiles. Direct HTTPS follows `tls=` for ClientHello counts and for the product header and HTTP/2 settings table. Pages were rechecked for 100 and 159. Record length is not byte-identical. Do not add a JA3 switch.
 3. C client install name is done. `otool -D` prints `@rpath/libruyijs_client.dylib`, and the rpath is `@executable_path`.
 4. Image pixels. Keep ImageIO. A fixture can record the GIF background difference. Change pixels only when ImageIO already exposes the matching disposal.
 5. Font aliases. `Osaka-Mono` to `Osaka` is the only Mac alias. Mac family selection stays the Core Text cascade. The upstream pref-lang, SimSun, and Arial lists stay on the Windows side of `font_collection.cpp`. The Windows cache separator stays the source escape `'\0'`, so the file stays text.
@@ -187,7 +188,7 @@ The shell stays linked for `macosx_26_0_arm64`. Linux, Intel Macs, and macOS old
 
 ## What not to commit
 
-Do not commit the Firefox tree, either objdir, `dist/js`, the helper venv, the macOS runtime zip, cookies, tokens, proxy credentials, or response bodies. The macOS `runtime.json` object may store size and sha256. Leave its URL empty until a real download exists.
+Do not commit the Firefox tree, either objdir, `dist/js`, the helper venv, the macOS runtime zip, `libnecko_quic.dylib`, `neqo-server`, `native/necko_quic/Cargo.lock`, cookies, tokens, proxy credentials, or response bodies. The macOS `runtime.json` object may store size and sha256. Leave its URL empty until a real download exists.
 
 ## Reporting a macOS issue
 
@@ -196,3 +197,7 @@ Include the ruyijs commit, the macOS version, the Xcode version, the Python vers
 ## Maintainer fork
 
 Upstream `main` stays the Windows release line. On the macOS maintainer fork, fixes land on `release/macos` first and that fork's `main` fast-forwards to the same commit. An upstream update is merged on a branch cut from `release/macos`, reviewed, and merged back. It is not merged into that fork's `main` directly.
+
+## Closed route
+
+Cleartext HTTP and HTTP/3 follow the Windows exports. The notes are in `docs/closed-route.zh-CN.md`. The socket process stays off.

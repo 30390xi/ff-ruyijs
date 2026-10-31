@@ -83,9 +83,13 @@ def build_necko_core(root, necko_obj):
     libdir = necko_obj / "dist" / "bin"
     include = necko_obj / "dist" / "include"
     nspr_source = necko_obj.parent / "nsprpub" / "pr" / "include"
-    source = root / "native" / "necko_tls" / "necko_tls.c"
-    if not source.is_file():
-        raise FileNotFoundError(source)
+    sources = [
+        root / "native" / "necko_tls" / "necko_tls.c",
+        root / "native" / "necko_tls" / "necko_exchange.c",
+    ]
+    for source in sources:
+        if not source.is_file():
+            raise FileNotFoundError(source)
     if not (libdir / "libnss3.dylib").is_file():
         raise FileNotFoundError(libdir / "libnss3.dylib")
     if not (nspr_source / "obsolete" / "protypes.h").is_file():
@@ -99,7 +103,7 @@ def build_necko_core(root, necko_obj):
         "-I", str(include / "nss"),
         "-I", str(include / "nspr"),
         "-I", str(nspr_source),
-        str(source),
+        *[str(source) for source in sources],
         "-L", str(libdir),
         "-lnss3",
         "-Wl,-rpath,@loader_path",
@@ -111,7 +115,7 @@ def build_necko_core(root, necko_obj):
         link = out / name
         if link.is_symlink() or link.exists():
             link.unlink()
-        link.symlink_to(libdir / name)
+        link.symlink_to((libdir / name).resolve())
     return output
 
 
@@ -186,6 +190,12 @@ def install_network_helper(root, deployed):
         if core_source.is_file():
             copied = necko_dir / "core_client.py"
             copied.write_bytes(core_source.read_bytes())
+            deployed.append(copied)
+            installed.append(copied)
+        closed_source = root / "src/resource_network/necko_closed_route.py"
+        if closed_source.is_file():
+            copied = necko_dir / "closed_route.py"
+            copied.write_bytes(closed_source.read_bytes())
             deployed.append(copied)
             installed.append(copied)
         win_source = root / "native/necko_tls/necko_win"
