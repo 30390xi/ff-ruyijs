@@ -334,7 +334,7 @@ ff-ruyijs 采用**双许可**：
 
 <table>
 <tr>
-<td align="center" width="150"><a href="https://github.com/Facetomyself"><img src="https://avatars.githubusercontent.com/u/103901201?v=4" width="80" height="80" alt="Facetomyself"><br><b>Facetomyself</b></a><br><sub><a href="https://github.com/cutetailbud/ff-ruyijs/pull/4">#4 macOS arm64 外壳</a></sub></td>
+<td align="center" width="150"><a href="https://github.com/Facetomyself"><img src="https://avatars.githubusercontent.com/u/103901201?v=4" width="80" height="80" alt="Facetomyself"><br><b>Facetomyself</b></a><br><sub><a href="https://github.com/cutetailbud/ff-ruyijs/pull/4">#4 macOS arm64 外壳</a>、<a href="https://github.com/cutetailbud/ff-ruyijs/pull/6">#6 QUIC 配置</a></sub></td>
 <td align="center" width="150"><a href="https://github.com/Starktomy"><img src="https://avatars.githubusercontent.com/u/37720599?v=4" width="80" height="80" alt="Starktomy"><br><b>Starktomy</b></a><br><sub><a href="https://github.com/cutetailbud/ff-ruyijs/pull/5">#5 Linux 运行时</a></sub></td>
 </tr>
 </table>
