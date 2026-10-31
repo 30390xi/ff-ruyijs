@@ -90,6 +90,11 @@ def _install_darwin_helper(build_lib, project):
         build_lib / "necko/adapters.py": source / "necko_adapters.py",
         build_lib / "necko/__init__.py": source / "necko_pkg_init.py",
         build_lib / "necko/necko_fetch.js": source / "necko_fetch.js",
+        build_lib / "ruyijs_necko/webtransport_worker.py": source / "webtransport_worker.py",
+        build_lib / "ruyijs_necko/webtransport_wire.py": source / "webtransport_wire.py",
+        build_lib / "ruyijs_necko/webtransport_verify.py": source / "webtransport_verify.py",
+        build_lib / "ruyijs_necko/webtransport_session.py": source / "webtransport_session.py",
+        build_lib / "ruyijs_necko/webtransport_connection.py": source / "webtransport_connection.py",
     }
     for dest, src in mapping.items():
         if not src.is_file():

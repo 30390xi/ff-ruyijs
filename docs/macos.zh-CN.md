@@ -94,6 +94,11 @@ bootstrap 安装 `requests`、`brotli`、`zstandard`、`h2`、`cryptography`、`
 | `src/resource_network/necko_adapters.py` | `necko/adapters.py` |
 | `src/resource_network/necko_pkg_init.py` | `necko/__init__.py` |
 | `src/resource_network/necko_core_client.py` | `necko/core_client.py` |
+| `src/resource_network/webtransport_worker.py` | `ruyijs_necko/webtransport_worker.py` |
+| `src/resource_network/webtransport_wire.py` | `ruyijs_necko/webtransport_wire.py` |
+| `src/resource_network/webtransport_verify.py` | `ruyijs_necko/webtransport_verify.py` |
+| `src/resource_network/webtransport_session.py` | `ruyijs_necko/webtransport_session.py` |
+| `src/resource_network/webtransport_connection.py` | `ruyijs_necko/webtransport_connection.py` |
 | `native/necko_tls/necko_win/` | helper 导入路径上的 `necko_win/` |
 
 Windows 上同一次构建只复制 `oneshot.py`。Darwin 的 venv 不存在时，外壳仍然完成链接，也不会另造一个发布包。
@@ -166,7 +171,7 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 | 字体别名 | 平台字体列表 | PostScript 名和字体族都匹配时，`Osaka-Mono` 映射到 `Osaka`。这一条来自 Firefox 的单字体列表 |
 | COLR 与 CPAL | 版本 0，调色板 0 | 版本 0，调色板 0。表字节来自 `CTFontCopyTable` |
 | 字形 gamma | DirectWrite 渲染模式 | `SystemTextGamma` 为 1.8，`SystemTextContrast` 为 1.0。可以读 `gasp` 和 `maxp` |
-| WebTransport | 与 Mac 共用的 C++。树里没有 `webtransport_worker.py` | 同一份源码。真正的会话走上面那条 HTTP/3 |
+| WebTransport | 共用的 C++ 帧。helper 模块已经在树里。0.2.1 安装仍走 `necko._http3.Connection` 和 `necko_quic.dll` | 同一套帧走 `libnecko_quic.dylib`。`webtransport=true` 只在这条长连接上。普通 HTTP/3 仍是 `webtransport=False`。哈希规则仍是 ECDSA P-256，有效期最多 14 天。本机 `127.0.0.1:9443` 协商成功，状态 200，回声 `ping`。不带哈希时 PKI 校验失败。这不是 60 个版本的 QUIC ClientHello 切换 |
 | iframe 文档加载 | 同一份源码。Necko 时刻经 QueryPerformanceCounter 换算 | 同一份源码。时刻经 `steady_clock` 的毫秒换算，与 `page_navigation.cpp` 相同。一个 iframe 文档返回状态 200 和 `h2` |
 | WebCodecs、音频解码、WebGPU、自定义内置元素、XML、表单目标 | 同一份源码 | 只有接口，或者明确返回未实现 |
 | DataDome 首页 | 服务端评分 | 服务端评分。示例的通过条件不变 |
@@ -179,7 +184,7 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 
 外壳按 `macosx_26_0_arm64` 链接。Linux、Intel Mac，以及低于 macOS 26 的系统不在这份计划里。新行为只接到已经在用的 Firefox donor 或系统框架：ImageIO、Core Text、Core Graphics、CommonCrypto、Security。
 
-1. 本机明文和 HTTP/3 已经走 Windows 的导出名字。同一进程的证明连续通过两遍，公网 `quic.nginx.org` 的第二次请求也是版本码 30。socket process 保持关闭；打开后这只 xpcshell 仍以信号 11 退出，日志是空的。WebTransport 仍要等版本码 30 上的真实会话。不用 `--session` 的页面请求不会保留 `Alt-Svc` 缓存。这个进程边界来自两边共用的 oneshot。
+1. 本机明文和 HTTP/3 已经走 Windows 的导出名字。同一进程的证明连续通过两遍，公网 `quic.nginx.org` 的第二次请求也是版本码 30。socket process 保持关闭；打开后这只 xpcshell 仍以信号 11 退出，日志是空的。WebTransport 现在用同一份库维持一条长连接：本机回声 `127.0.0.1:9443` 协商成功，状态 200，数据报 `ping` 被原样回声。不带证书哈希时，PKI 校验这张证书失败。不用 `--session` 的页面请求不会保留 `Alt-Svc` 缓存。这个进程边界来自两边共用的 oneshot。
 2. TLS 配置。直连 HTTPS 的握手个数，以及产品请求头和 HTTP/2 设置表，都跟着 `tls=`。页面复查了 100 和 159。记录长度不要求逐字节相同。不要加 JA3 开关。
 3. C 客户端安装名已经完成。`otool -D` 打印 `@rpath/libruyijs_client.dylib`，rpath 是 `@executable_path`。
 4. 图像像素。继续用 ImageIO。可以用一条夹具记下 GIF 背景色差异。只有 ImageIO 已经提供对应 disposal 时才改像素。

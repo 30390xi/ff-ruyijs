@@ -94,6 +94,11 @@ Bootstrap installs `requests`, `brotli`, `zstandard`, `h2`, `cryptography`, `bac
 | `src/resource_network/necko_adapters.py` | `necko/adapters.py` |
 | `src/resource_network/necko_pkg_init.py` | `necko/__init__.py` |
 | `src/resource_network/necko_core_client.py` | `necko/core_client.py` |
+| `src/resource_network/webtransport_worker.py` | `ruyijs_necko/webtransport_worker.py` |
+| `src/resource_network/webtransport_wire.py` | `ruyijs_necko/webtransport_wire.py` |
+| `src/resource_network/webtransport_verify.py` | `ruyijs_necko/webtransport_verify.py` |
+| `src/resource_network/webtransport_session.py` | `ruyijs_necko/webtransport_session.py` |
+| `src/resource_network/webtransport_connection.py` | `ruyijs_necko/webtransport_connection.py` |
 | `native/necko_tls/necko_win/` | `necko_win/` on the helper path |
 
 On Windows the same build copies only `oneshot.py`. If the Darwin venv is missing, the shell still links and no release archive is created.
@@ -166,7 +171,7 @@ Reviewed against upstream `a626670`. That range includes the 0.2.1 shell, the CS
 | Font alias | The platform font list | `Osaka-Mono` maps to `Osaka` when the PostScript name and the family both match. That entry is Firefox's single-face list |
 | COLR and CPAL | Version 0, palette 0 | Version 0, palette 0. Table bytes come from `CTFontCopyTable` |
 | Glyph gamma | DirectWrite rendering mode | `SystemTextGamma` is 1.8 and `SystemTextContrast` is 1.0. `gasp` and `maxp` are readable |
-| WebTransport | Shared C++. `webtransport_worker.py` is absent from the tree | Same sources. A live session uses the HTTP/3 path in the row above |
+| WebTransport | Shared C++ frames. The helper modules are in the tree. A 0.2.1 install still uses `necko._http3.Connection` and `necko_quic.dll` | Same frames on `libnecko_quic.dylib`. `webtransport=true` only on the long-lived session. Ordinary HTTP/3 stays `webtransport=False`. Hashes stay ECDSA P-256 and at most 14 days. Local `127.0.0.1:9443` negotiated, returned status 200, and echoed `ping`. Without hashes, PKI verification failed. This is not a 60-version QUIC ClientHello switch |
 | iframe document load | Shared source. Necko ticks map through QueryPerformanceCounter | Same source. Ticks map through `steady_clock` milliseconds, as in `page_navigation.cpp`. One iframe document returned status 200 and `h2` |
 | WebCodecs, audio decode, WebGPU, customized built-ins, XML, form target | Same source | Interface only, or an explicit unimplemented error |
 | DataDome homepage | Server score | Server score. The example pass condition is unchanged |
@@ -179,7 +184,7 @@ Reviewed against upstream `a626670`. That range includes the 0.2.1 shell, the CS
 
 The shell stays linked for `macosx_26_0_arm64`. Linux, Intel Macs, and macOS older than 26 stay outside this plan. New behavior comes from the Firefox donor or the system frameworks already linked: ImageIO, Core Text, Core Graphics, CommonCrypto, and Security.
 
-1. Local cleartext and HTTP/3 now use the Windows export names. The same-process proof passed twice, and public `quic.nginx.org` returned version 30 on the second request. The socket process stays off; turning it on still makes this xpcshell exit with signal 11 and write an empty log. WebTransport still needs a live session on version 30. A page request without `--session` does not keep the `Alt-Svc` cache. That process boundary comes from the shared oneshot.
+1. Local cleartext and HTTP/3 now use the Windows export names. The same-process proof passed twice, and public `quic.nginx.org` returned version 30 on the second request. The socket process stays off; turning it on still makes this xpcshell exit with signal 11 and write an empty log. WebTransport now uses that same library for one long-lived session: a local echo at `127.0.0.1:9443` negotiated, returned status 200, and echoed the datagram `ping`. Without certificate hashes, PKI verification of that certificate failed. A page request without `--session` does not keep the `Alt-Svc` cache. That process boundary comes from the shared oneshot.
 2. TLS profiles. Direct HTTPS follows `tls=` for ClientHello counts and for the product header and HTTP/2 settings table. Pages were rechecked for 100 and 159. Record length is not byte-identical. Do not add a JA3 switch.
 3. C client install name is done. `otool -D` prints `@rpath/libruyijs_client.dylib`, and the rpath is `@executable_path`.
 4. Image pixels. Keep ImageIO. A fixture can record the GIF background difference. Change pixels only when ImageIO already exposes the matching disposal.

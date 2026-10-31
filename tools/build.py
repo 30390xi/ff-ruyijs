@@ -198,6 +198,18 @@ def install_network_helper(root, deployed):
             copied.write_bytes(closed_source.read_bytes())
             deployed.append(copied)
             installed.append(copied)
+        for name in (
+            "webtransport_worker.py",
+            "webtransport_wire.py",
+            "webtransport_verify.py",
+            "webtransport_session.py",
+            "webtransport_connection.py",
+        ):
+            source = root / "src/resource_network" / name
+            copied = package / name
+            copied.write_bytes(source.read_bytes())
+            deployed.append(copied)
+            installed.append(copied)
         win_source = root / "native/necko_tls/necko_win"
         if win_source.is_dir():
             win_dest = necko_dir.parent / "necko_win"

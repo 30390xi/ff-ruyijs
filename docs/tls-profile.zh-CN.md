@@ -8,7 +8,7 @@ Mac 的 TLS 开关沿用 Windows 0.2.1 wheel 的原生入口。`oneshot.py` 导�
 
 本轮按这份 ABI 和 donor NSS 3.131 头文件，在 `native/necko_tls/necko_tls.c` 写了 arm64 适配器，编成 `libnecko_core.dylib`。配置表只剩 `native/necko_tls/necko_win/_tls_profiles.py`，与 Windows wheel 里的同名文件逐字节相同（4883 字节，MPL-2.0）。`native/necko_tls/_tls_profiles.py` 那份重复文件已删除。`hello_probe.py` 加载 `necko_win` 里的这一份。Mac 不把 Firefox 100–159 写成 xpcshell 偏好，也不在 JavaScript 里拼 ClientHello。
 
-这个库是套在读写回调上的 TLS 过滤器。直连 HTTPS 的 HTTP/2 仍用 hyper-h2，铺在 wheel 的 `_nss.TLS` 上。连接建立在 `native/necko_tls/necko_win/_wire.py`，是 0.2.1 打开路径的一小段拷贝。它不是整份 `_http2.py`，也不导入 HTTP/3 模块。调用方没给的请求头，由 `necko_win/_firefox.py`（0.2.1 的 `_firefox.py`）按这个 `tls=` 补上。调用方写了的头优先。同一份文件提供 HTTP/2 SETTINGS、优先级树开关和 HPACK 编码器策略。这份文件里的 HTTP/3 字段不用。`wire_headers` 会找 `ruyijs_necko.wire_fields.WireFields`，`ImportError` 时继续。Mac helper 不带 `wire_fields.py`。表里的 User-Agent 仍是 wheel 里的 Windows 字符串。`configure_fingerprint` 仍是 navigator 那一层。ALPN `h2` 的版本码是 20。ALPN 为 `http/1.1` 时，同一条套接字写 HTTP/1.1，版本码 11，包括 Content-Length、分块正文，以及跳过的 1xx。这个解析器做过单元测试。没有对活的 HTTP/1.1 源打开过。其他 ALPN 会关掉套接字，并记成表示不了。
+这个库是套在读写回调上的 TLS 过滤器。直连 HTTPS 的 HTTP/2 仍用 hyper-h2，铺在 wheel 的 `_nss.TLS` 上。连接建立在 `native/necko_tls/necko_win/_wire.py`，是 0.2.1 打开路径的一小段拷贝。它不是整份 `_http2.py`，也不导入 HTTP/3 模块。调用方没给的请求头，由 `necko_win/_firefox.py`（0.2.1 的 `_firefox.py`）按这个 `tls=` 补上。调用方写了的头优先。同一份文件提供 HTTP/2 SETTINGS、优先级树开关和 HPACK 编码器策略。这份文件里的 HTTP/3 字段由 `libnecko_quic` 读取，不写进 TLS ClientHello。细节见 `docs/closed-route.zh-CN.md`。`wire_headers` 会找 `ruyijs_necko.wire_fields.WireFields`，`ImportError` 时继续。Mac helper 不带 `wire_fields.py`。表里的 User-Agent 仍是 wheel 里的 Windows 字符串。`configure_fingerprint` 仍是 navigator 那一层。ALPN `h2` 的版本码是 20。ALPN 为 `http/1.1` 时，同一条套接字写 HTTP/1.1，版本码 11，包括 Content-Length、分块正文，以及跳过的 1xx。这个解析器做过单元测试。没有对活的 HTTP/1.1 源打开过。其他 ALPN 会关掉套接字，并记成表示不了。
 
 直连 HTTPS 在 `necko_tls_nss_version()` 为 `3.131` 时走这个库。`python/ruyijs/_context.py` 只在 `NECKO_CORE_LIBRARY` 未设置时写入它。先找 `dist/necko_tls/libnecko_core.dylib`，再找 `dist/necko/libnecko_core.dylib`。暂存树的 NSS 同级库已经在 `dist/necko`，dylib 的 rpath 是 `@loader_path`。这次没有重打运行时压缩包，`macos.url` 仍为空。oneshot 客户端在环境变量指向的文件存在时用它，否则沿父目录找同样两个位置，最后才看旁边的 `libnecko_core.dylib`。证书校验用 wheel 里的 cryptography 校验器和 Firefox 根证书。校验失败不回退到 xpcshell。`https://expired.badssl.com/` 抛出 `SSLCertVerificationError`，失败种类是 `verify`。oneshot 帧里没有客户端证书。`fetch(..., cert=)` 在连接前抛出，路由只在这种表示不了的情况、不支持的 ALPN，或 HTTP/2 GOAWAY 说明对端要求 HTTP/1.1 时才回退。代理、非 HTTPS、库不存在，或 NSS 版本不同，仍走 donor xpcshell，那边的校验器仍是 mozpkix。这次运行里 `RUYIJS_HTTP_PROXY` 没有设置，所以代理路径没有重测。`necko_fetch.js` 仍然不读 `NECKO_FIREFOX`。
 
@@ -59,7 +59,7 @@ donor 的 obj-necko `XUL` 没有 `necko_tls_open_profile` 字符串。`libnss3.d
 
 本轮用现成的 `dist/js` 打开页面，没有重编外壳。`Context()` 和 `Context(tls="100")` 都打开了 `https://example.com/`，状态 200，协议 `h2`，`readyState` 为 complete。属性分别是 `159` 和 `100`。这两次导航期间 xpcshell 没有在跑。第一条连接跟着 `tls=`：159 是 15 个套件、5 个组、3 个 key share，有 SCT、有 ECH、证书压缩算法个数 3，记录 1834 字节；100 是 17、6、2，没有 SCT，没有 ECH，记录 517 字节。同一页的第二条连接个数不变，记录长度不同，所以长度不作为验收条件。这些记录都不是原来那份 1869 字节的 xpcshell 握手。
 
-证书校验开着，对 100、119、132、135、151、154、156、159 各做一次库内 GET，都返回状态 200、ALPN `h2`。握手个数与配置表一致，156 仍在 156–159 那一组。156 的后量子签名变化只在未使用的 HTTP/3 表里，所以没有加进 TCP 握手。页面只复查了 100 和 159。这里不写已经把 60 个版本都当页面打开过。
+证书校验开着，对 100、119、132、135、151、154、156、159 各做一次库内 GET，都返回状态 200、ALPN `h2`。握手个数与配置表一致，156 仍在 156–159 那一组。156 的后量子签名变化只在 HTTP/3 表里，不写进 TLS ClientHello，所以没有加进 TCP 握手。页面只复查了 100 和 159。这里不写已经把 60 个版本都当页面打开过。
 
 同一个进程里，一个适配器对 `https://example.com/` 发两次 GET，只发出一个 ClientHello，两次都是状态 200。连接池的键是主机名、端口和 `tls=`，只保留 ALPN `h2`。HTTP/1.1 一次交换后关闭。失败的交换丢掉这条连接。会话票据保持打开，所以下一次握手可能更长。长度不作为验收条件。页面外壳仍是每个请求启动一次 oneshot。`--session` 才会复用这个适配器。不保存 cookie，`redirectionLimit` 仍是 0。
 
@@ -70,8 +70,8 @@ donor 的 obj-necko `XUL` 没有 `necko_tls_open_profile` 字符串。`libnss3.d
 1. 已完成。`tools/build.py --necko-core-only --firefox-gfx-obj <obj-necko>` 编出 arm64 `libnecko_core.dylib`，链到 donor NSS 3.131。产物在 gitignore 的 `dist/necko_tls/`。不要把 Windows DLL 拷进 Mac 树。
 2. 直连 HTTPS 已接上。oneshot 把没有代理的 `https` 交给这个库，代理和其他协议仍留在 xpcshell。`https://example.com/` 在 100 和 159 都返回状态 200、ALPN `h2`。库文件存在时，`tools/macos_runtime.py` 仍会把它拷进暂存目录。
 3. 已完成。直接库抓包里，`tls=100` 离开 15 个套件、5 个组、3 个 key share，`tls=159` 留在这个形状。对照的是上面的组。
-4. 这条套接字上的产品请求头和 SETTINGS 表已经套用。调用方的头优先。没写的头用拷到 `necko_win/_firefox.py` 的 0.2.1 `_firefox.py` 补上。这份文件里的 HTTP/3 字段不用。表里的 User-Agent 仍是 wheel 的 Windows 字符串。`configure_fingerprint` 仍是 navigator 那一层。八个簇边界（100、119、132、135、151、154、156、159）做了库内 GET：状态 200，ALPN `h2`，个数与表一致。页面只复查了 100 和 159。同一个进程里，对同一来源的两次 GET 只用一个 ClientHello。页面外壳仍是每个子资源启动一次 oneshot，除非使用 `--session`。会话票据保持打开。记录长度不作为验收条件，也不声称与 donor 页面握手逐字节相同。这里不写 Mac 页面已经切换全部 60 个版本。
-5. HTTP/3 等 `necko_quic`（`necko_quic_init`、`necko_quic_call`）。xpcshell 的 socket process 继续关着。
+4. 这条套接字上的产品请求头和 SETTINGS 表已经套用。调用方的头优先。没写的头用拷到 `necko_win/_firefox.py` 的 0.2.1 `_firefox.py` 补上。这份文件里的 HTTP/3 字段由 `libnecko_quic` 读取，不写进 TLS ClientHello。细节见 `docs/closed-route.zh-CN.md`。表里的 User-Agent 仍是 wheel 的 Windows 字符串。`configure_fingerprint` 仍是 navigator 那一层。八个簇边界（100、119、132、135、151、154、156、159）做了库内 GET：状态 200，ALPN `h2`，个数与表一致。页面只复查了 100 和 159。同一个进程里，对同一来源的两次 GET 只用一个 ClientHello。页面外壳仍是每个子资源启动一次 oneshot，除非使用 `--session`。会话票据保持打开。记录长度不作为验收条件，也不声称与 donor 页面握手逐字节相同。这里不写 Mac 页面已经切换全部 60 个版本。
+5. 同一进程里的 HTTP/3 已经接上。`libnecko_quic` 读取 HTTP/3 的 profile 字段，不把它们写进 TLS ClientHello。socket process 继续关着。细节见 `docs/closed-route.zh-CN.md`。
 
 不往 `necko_fetch.js` 里加配置补丁。
 
@@ -82,7 +82,7 @@ donor 的 obj-necko `XUL` 没有 `necko_tls_open_profile` 字符串。`libnss3.d
 - `Context()` 和 `Context(tls="100")` 打开 `https://example.com/` 都是状态 200、协议 `h2`，握手个数跟着 `tls=`。xpcshell 没有在跑。上面八个边界的库内 GET 也是这样。
 - 校验失败留在这个库上。`https://expired.badssl.com/` 抛出 `SSLCertVerificationError`，没有返回状态码。路由只在表示不了时回退：客户端证书、不支持的 ALPN，或对端要求 HTTP/1.1。客户端证书的检查在连接前抛出。没有用过活的客户端证书服务。
 - 同一进程内的同源 HTTP/2 复用通过：一个 ClientHello，两次状态 200。代理仍走 xpcshell。`RUYIJS_HTTP_PROXY` 没有设置，所以这条路径没有重测。
-- 明文 `http://example.com/` 在旧客户端和路由器上、`NECKO_CORE_LIBRARY` 设置与不设置时，都从 donor xpcshell 返回 `necko 804b0033`（`NS_ERROR_UNKNOWN_SOCKET_TYPE`）。这个缺口原来就在。这一轮不加明文栈，也不打开 socket process。
+- 直连明文走 `libnecko_core` 的 `necko_socket_*` / `necko_exchange_*`。请求若仍落到 donor xpcshell，返回 `necko 804b0033`（`NS_ERROR_UNKNOWN_SOCKET_TYPE`）。socket process 继续关着。细节见 `docs/closed-route.zh-CN.md`。
 - 仓库不增加 JA3 表、第二套 QUIC、Windows DLL，也不填写 `macos.url`。配置元组只放在那份 MPL 文件里。
 
 ## 否决

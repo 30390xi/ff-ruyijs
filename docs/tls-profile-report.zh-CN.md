@@ -129,7 +129,7 @@ oneshot 对没有代理的 `https` 使用这个库，代理和其他协议仍创
 
 ## 这一轮补上的行为
 
-请求头和 HTTP/2 设置改用 0.2.1 wheel 的 `_firefox.py`，文件在 `necko_win/_firefox.py`。调用方没写的头按 `tls=` 补上，调用方写了的头优先。SETTINGS、优先级树开关和 HPACK 编码器策略跟着这份表。表里的 HTTP/3 字段不用，也没有拷 `_http3.py`。`wire_fields.py` 不在 Mac 树上，导入失败时继续。表里的 User-Agent 仍是 wheel 的 Windows 字符串。
+请求头和 HTTP/2 设置改用 0.2.1 wheel 的 `_firefox.py`，文件在 `necko_win/_firefox.py`。调用方没写的头按 `tls=` 补上，调用方写了的头优先。SETTINGS、优先级树开关和 HPACK 编码器策略跟着这份表。表里的 HTTP/3 字段由 `libnecko_quic` 读取，不写进 TLS ClientHello，也没有拷整份 `_http3.py`。细节见 `docs/closed-route.zh-CN.md`。`wire_fields.py` 不在 Mac 树上，导入失败时继续。表里的 User-Agent 仍是 wheel 的 Windows 字符串。
 
 库查找：环境变量优先；否则先 `dist/necko_tls/libnecko_core.dylib`，再 `dist/necko/libnecko_core.dylib`。暂存目录里的 NSS 同级库本来就在 `dist/necko`。没有重打压缩包，`macos.url` 仍为空。
 
@@ -139,18 +139,18 @@ ALPN 为 `http/1.1` 时，同一条套接字写 HTTP/1.1。解析器的单元测
 
 证书校验失败不回退。`https://expired.badssl.com/` 经路由抛出 `SSLCertVerificationError`，失败种类是 `verify`，没有状态码。客户端证书在连接前就表示不了，路由才会回退。没有活的客户端证书服务。
 
-八个簇边界的库内 GET（100、119、132、135、151、154、156、159）都是状态 200、ALPN `h2`，个数与配置表一致。156 的后量子签名只在未使用的 HTTP/3 表里，TCP 握手仍是 156–159 那一组。页面只复查了 100 和 159，都是状态 200、协议 `h2`、`readyState` complete，xpcshell 进程数为 0。159 的个数是 15/5/3，100 是 17/6/2。
+八个簇边界的库内 GET（100、119、132、135、151、154、156、159）都是状态 200、ALPN `h2`，个数与配置表一致。156 的后量子签名只在 HTTP/3 表里，不写进 TLS ClientHello。TCP 握手仍是 156–159 那一组。页面只复查了 100 和 159，都是状态 200、协议 `h2`、`readyState` complete，xpcshell 进程数为 0。159 的个数是 15/5/3，100 是 17/6/2。
 
-明文 `http://example.com/` 在旧客户端和路由器上、库环境设置与不设置时，都返回 `necko 804b0033`（`NS_ERROR_UNKNOWN_SOCKET_TYPE`）。这是 donor 原有缺口，不是这次 diff 引入的，也没有修。没有加 Python 明文栈，没有打开 socket process。`RUYIJS_HTTP_PROXY` 这次没有设置，代理路径没有重测。
+这份报告测量时，明文 `http://example.com/` 会返回 `necko 804b0033`（`NS_ERROR_UNKNOWN_SOCKET_TYPE`）。当时没有加明文栈，也没有打开 socket process。现在的直连明文走 `libnecko_core` 的 `necko_socket_*` / `necko_exchange_*`。请求若仍落到 donor xpcshell，还是 `804b0033`。细节见 `docs/closed-route.zh-CN.md`。`RUYIJS_HTTP_PROXY` 这次没有设置，代理路径没有重测。
 
 ## 方案
 
-见 `docs/tls-profile.zh-CN.md`。直连 HTTPS 的握手个数和产品请求头、HTTP/2 设置表都跟着 `tls=`。页面只复查了 100 和 159。八个边界是库内 GET。`necko_fetch.js` 不加偏好表。还没做的是 HTTP/3，以及 donor 明文 HTTP 的套接字类型。记录长度不要求逐字节相同。
+见 `docs/tls-profile.zh-CN.md`。直连 HTTPS 的握手个数和产品请求头、HTTP/2 设置表都跟着 `tls=`。页面只复查了 100 和 159。八个边界是库内 GET。`necko_fetch.js` 不加偏好表。当时还没做的是 HTTP/3，以及 donor 明文 HTTP 的套接字类型。这两项后来分别接到 `libnecko_quic` 和 `libnecko_core`，见 `docs/closed-route.zh-CN.md`。记录长度不要求逐字节相同。
 
 ## 这次没有做的事
 
 - 没有改 donor，没有重编外壳，没有打 wheel 或运行时压缩包。
-- 没有打开 socket process，没有加 QUIC，没有拷 `_http3.py`。
+- 没有打开 socket process，没有拷整份 `_http3.py`。后来的 `libnecko_quic` 不在这次报告的改动里，见 `docs/closed-route.zh-CN.md`。
 - 没有把 Windows DLL 装进 Mac。
 - 没有在文档里抄套件序列或 JA3。配置元组只在那份 MPL 文件里。
 - 没有重测代理。
