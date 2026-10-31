@@ -1,6 +1,6 @@
 # macOS arm64 维护说明
 
-这是 Mac 外壳的维护路径。Windows x64 仍然从 PyPI wheel 安装。macOS 在本机已经有 `dist/js` 和 `dist/libmozglue.dylib` 之后，可以打出本地的 `macosx_26_0_arm64` wheel。`runtime.json` 记下这份压缩包的大小和 sha256。macOS 的 URL 保持为空，这个仓库也不上传 wheel。
+这是 Mac 外壳的维护路径。Windows x64 仍然从 PyPI wheel 安装。macOS 在本机已经有 `dist/js` 和 `dist/libmozglue.dylib` 之后，可以打出 `macosx_26_0_arm64` wheel。`runtime.json` 记下这份压缩包的大小、sha256 和维护者 fork Release 的 URL。这个 wheel 不上传到 PyPI。
 
 同一份事实的英文版在 [macos.md](macos.md)。
 
@@ -10,7 +10,7 @@ Python API、DOM、时钟和页面逻辑仍是同一份源码。macOS 增加的�
 
 - 同一套 API：JS 上下文、DOM、Python 桥、WebCrypto 算法，以及静态图格式。
 - 可以接受的平台差异：命名管道或 Unix socket，CNG 或 CommonCrypto，WIC 或 ImageIO，DirectWrite 或 Core Text。GIF disposal、字形 gamma 和中文回退跟随系统解码器，不要求与 Windows 像素一致。
-- 这次仍不做：socket process 保持关闭。打开后这份 xpcshell 以信号 11 退出，日志是空的。直连 HTTPS 经 `libnecko_core.dylib` 跟随 `Context(tls=)`，握手个数和 0.2.1 的请求头、HTTP/2 设置表都跟着走。页面复查了 100 和 159。八个边界版本是库内 GET，不是页面。代理仍走 xpcshell，这次没有重测。DNS、连接和 TLS 计时保持 0。没有 macOS 的 PyPI wheel，`macos.url` 保持为空。直连明文和 HTTP/3 写在 `docs/closed-route.zh-CN.md`。
+- 这次仍不做：socket process 保持关闭。只打开偏好时，这份 xpcshell 在填写 Mac sandbox 参数时以信号 11 退出。donor 的 `plugin-container.app` 由编 `ipc/app` 得到。直连 HTTPS 经 `libnecko_core.dylib` 跟随 `Context(tls=)`，握手个数和 0.2.1 的请求头、HTTP/2 设置表都跟着走。页面复查了 100 和 159。八个边界版本是库内 GET，不是页面。代理仍走 xpcshell，这次没有重测。DNS、连接和 TLS 计时保持 0。没有 PyPI 上的 macOS wheel。`macos.url` 指向 fork Release 里的压缩包。直连明文和 HTTP/3 写在 `docs/closed-route.zh-CN.md`。
 
 ## 各部分放在哪
 
@@ -105,7 +105,7 @@ Windows 上同一次构建只复制 `oneshot.py`。Darwin 的 venv 不存在时�
 
 外壳二进制是 `dist/js`。跑示例时把 `RUYIJS_SHELL` 指到它，并把 `python/` 放进 `PYTHONPATH`。客户端库是 `libruyijs_client.dylib`。
 
-本地 wheel 的标签是 `macosx_26_0_arm64`。外壳放在 `_runtime/dist/js`，donor 的 xpcshell 闭包复制到 `_runtime/dist/necko`。这个 wheel 不上传。重新生成压缩包用 `python3.12 -B tools/macos_runtime.py <zip路径>`，再把打印出的 size 和 sha256 写进 `runtime.json` 的 `macos`，`url` 留空。
+本地 wheel 的标签是 `macosx_26_0_arm64`。外壳放在 `_runtime/dist/js`，donor 的 xpcshell 闭包复制到 `_runtime/dist/necko`。库文件存在时，一并复制 `libnecko_quic.dylib`。wheel 里还有 `necko/closed_route.py`、`necko/core_client.py` 和 `necko_win`。wheel 和 `ruyijs-runtime-macos-arm64.zip` 放在维护者 fork 的 Release 上，不放上 PyPI。重新生成压缩包用 `python3.12 -B tools/macos_runtime.py <zip路径>`，再把打印出的 size、sha256 和 Release URL 写进 `runtime.json` 的 `macos`。
 
 ## 一次请求怎么走
 
@@ -171,11 +171,11 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 | 字体别名 | 平台字体列表 | PostScript 名和字体族都匹配时，`Osaka-Mono` 映射到 `Osaka`。这一条来自 Firefox 的单字体列表 |
 | COLR 与 CPAL | 版本 0，调色板 0 | 版本 0，调色板 0。表字节来自 `CTFontCopyTable` |
 | 字形 gamma | DirectWrite 渲染模式 | `SystemTextGamma` 为 1.8，`SystemTextContrast` 为 1.0。可以读 `gasp` 和 `maxp` |
-| WebTransport | 共用的 C++ 帧。helper 模块已经在树里。0.2.1 安装仍走 `necko._http3.Connection` 和 `necko_quic.dll` | 同一套帧走 `libnecko_quic.dylib`。`webtransport=true` 只在这条长连接上。普通 HTTP/3 仍是 `webtransport=False`。哈希规则仍是 ECDSA P-256，有效期最多 14 天。页面外壳拉起 `oneshot --webtransport` 打本机 `127.0.0.1:9443`：协商成功，状态 200，数据报 `ping` 被回声。不带哈希时 PKI 校验失败。这不是 60 个版本的 QUIC ClientHello 切换 |
+| WebTransport | 共用的 C++ 帧。helper 模块已经在树里。0.2.1 安装仍走 `necko._http3.Connection` 和 `necko_quic.dll` | 同一套帧走 `libnecko_quic.dylib`。`webtransport=true` 只在这条长连接上。普通 HTTP/3 仍是 `webtransport=False`。哈希规则仍是 ECDSA P-256，有效期最多 14 天。页面外壳拉起 `oneshot --webtransport` 打本机 `127.0.0.1:9443`：协商成功，状态 200，数据报 `ping` 被回声。不带哈希时 PKI 校验失败。QUIC ClientHello 按 100 到 159 的分叉点写入。本机 Initial 个数一致。记录不要求逐字节相同，也不做 JA3。 |
 | iframe 文档加载 | 同一份源码。Necko 时刻经 QueryPerformanceCounter 换算 | 同一份源码。时刻经 `steady_clock` 的毫秒换算，与 `page_navigation.cpp` 相同。一个 iframe 文档返回状态 200 和 `h2` |
 | WebCodecs、音频解码、WebGPU、自定义内置元素、XML、表单目标 | 同一份源码 | 只有接口，或者明确返回未实现 |
 | DataDome 首页 | 服务端评分 | 服务端评分。示例的通过条件不变 |
-| 安装 | PyPI 的 0.2.1 `win_amd64` wheel | 上一份本地 `macosx_26_0_arm64` wheel 没有重打。`runtime.json` 的 `macos.url` 仍为空。里面的 macOS 大小和 sha256 属于那份旧压缩包，不是这个 0.2.1 外壳 |
+| 安装 | PyPI 的 0.2.1 `win_amd64` wheel | `macosx_26_0_arm64` wheel 和 `ruyijs-runtime-macos-arm64.zip` 在 fork Release `v0.2.1`。`runtime.json` 的 `macos.url` 指向这份压缩包。两者都不在 PyPI |
 | C ABI 客户端 | 外壳旁边的 DLL | `libruyijs_client.dylib` 的安装名是 `@rpath/libruyijs_client.dylib`，rpath 为 `@executable_path`。XUL、xpcshell、NSS 的安装名保持 Firefox 写好的样子 |
 
 `image_wic.h` 里仍有一段 POSIX 桩。macOS 的解码走 `image_codec.cpp` 和 `image_gif.cpp` 里的 ImageIO。
@@ -184,16 +184,16 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 
 外壳按 `macosx_26_0_arm64` 链接。Linux、Intel Mac，以及低于 macOS 26 的系统不在这份计划里。新行为只接到已经在用的 Firefox donor 或系统框架：ImageIO、Core Text、Core Graphics、CommonCrypto、Security。
 
-1. 本机明文和 HTTP/3 已经走 Windows 的导出名字。同一进程的证明连续通过两遍，公网 `quic.nginx.org` 的第二次请求也是版本码 30。socket process 保持关闭；打开后这只 xpcshell 仍以信号 11 退出，日志是空的。WebTransport 现在用同一份库维持一条长连接。页面外壳拉起 `oneshot --webtransport` 打本机回声 `127.0.0.1:9443`：协商成功，状态 200，数据报 `ping` 被原样回声。不带证书哈希时，PKI 校验这张证书失败。不用 `--session` 的页面请求不会保留 `Alt-Svc` 缓存。这个进程边界来自两边共用的 oneshot。
+1. 本机明文和 HTTP/3 已经走 Windows 的导出名字。同一进程的证明连续通过两遍，公网 `quic.nginx.org` 的第二次请求也是版本码 30。socket process 保持关闭。只打开偏好时，这只 xpcshell 仍在填写 Mac sandbox 参数时以信号 11 退出。WebTransport 现在用同一份库维持一条长连接。页面外壳拉起 `oneshot --webtransport` 打本机回声 `127.0.0.1:9443`：协商成功，状态 200，数据报 `ping` 被原样回声。不带证书哈希时，PKI 校验这张证书失败。不用 `--session` 的页面请求不会保留 `Alt-Svc` 缓存。这个进程边界来自两边共用的 oneshot。
 2. TLS 配置。直连 HTTPS 的握手个数，以及产品请求头和 HTTP/2 设置表，都跟着 `tls=`。页面复查了 100 和 159。记录长度不要求逐字节相同。不要加 JA3 开关。
 3. C 客户端安装名已经完成。`otool -D` 打印 `@rpath/libruyijs_client.dylib`，rpath 是 `@executable_path`。
 4. 图像像素。继续用 ImageIO。可以用一条夹具记下 GIF 背景色差异。只有 ImageIO 已经提供对应 disposal 时才改像素。
 5. 字体别名。Mac 只保留 `Osaka-Mono` 到 `Osaka`。字体选择仍走 Core Text 回退。上游的语言偏好、SimSun 和 Arial 列表留在 `font_collection.cpp` 的 Windows 一侧。Windows 的缓存分隔符保持源码转义 `'\0'`，文件因此仍是文本。
-6. 发布。`runtime.json` 的 `macos.url` 保持为空。那里记下的压缩包是上一份外壳，不是 0.2.1。这一轮不重打 wheel，也不重打压缩包。COLRv1、Linux、Intel Mac，以及低于 macOS 26 的系统都不做。
+6. 发布。`runtime.json` 的 `macos.url` 是 fork Release `v0.2.1` 的压缩包。同一份 Release 里有 `ruyijs-0.2.1-py3-none-macosx_26_0_arm64.whl`。两者都不在 PyPI。干净安装可以导入。直连 HTTPS 返回状态 200、版本码 20。本机 HTTP/3 的第二次请求返回状态 200、版本码 30。`libnecko_quic.dylib` 从打包后的 `dist/necko` 加载。COLRv1、Linux、Intel Mac，以及低于 macOS 26 的系统都不做。
 
 ## 不要提交的东西
 
-不要提交 Firefox 树、两份 objdir、`dist/js`、helper venv、macOS 运行时压缩包、`libnecko_quic.dylib`、`neqo-server`、`native/necko_quic/Cargo.lock`、cookie、token、代理凭据或响应正文。`runtime.json` 的 macOS 对象可以记下大小和 sha256。在真实下载地址出现之前，URL 保持为空。
+不要提交 Firefox 树、两份 objdir、`dist/js`、helper venv、macOS 运行时压缩包、`libnecko_quic.dylib`、`neqo-server`、`native/necko_quic/Cargo.lock`、cookie、token、代理凭据或响应正文。`runtime.json` 的 macOS 对象记下大小、sha256 和 fork Release 的 URL。不要把压缩包本身提交进 git。
 
 ## 报告 macOS 问题
 

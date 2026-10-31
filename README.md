@@ -40,7 +40,7 @@ Headless Chrome and Playwright hand you a whole browser: a GPU-rendering, window
 
 If you scrape, reverse-engineer web JavaScript, or collect data behind a challenge, it's for you. If a plain HTTP client already gets your pages, you don't need it.
 
-Windows x64 ships as a wheel with **Python 3.10+** (verified on Python 3.14). macOS arm64 is a source build; the donor layout and the surfaces that are still empty are in [docs/macos.md](docs/macos.md).
+Windows x64 ships as a wheel with **Python 3.10+** (verified on Python 3.14). macOS arm64 is a source build and a fork-release wheel; the donor layout and the surfaces that are still empty are in [docs/macos.md](docs/macos.md).
 
 ## 📦 Installation
 
@@ -52,7 +52,7 @@ python -m pip install ruyijs
 
 The Windows wheel ships the SHA256-pinned SpiderMonkey + Necko runtime (~42 MB). Local scripts run offline right after install — no browser download, no external dependencies.
 
-**macOS arm64** is not this wheel. Build it from source with Python 3.12 and two official Firefox donor trees that stay outside the repository. The page path checked this round is direct HTTPS over HTTP/2. HTTP/1.1 is written when ALPN is `http/1.1` and was unit-tested, not opened against a live origin. Steps and the unfinished surfaces are in [docs/macos.md](docs/macos.md).
+**macOS arm64** is not this PyPI wheel. Build it from source with Python 3.12 and two official Firefox donor trees that stay outside the repository, or install the `macosx_26_0_arm64` wheel from the maintainer fork release `v0.2.1`. That wheel is not on PyPI. The page path checked this round is direct HTTPS over HTTP/2. HTTP/1.1 is written when ALPN is `http/1.1` and was unit-tested, not opened against a live origin. Steps and the unfinished surfaces are in [docs/macos.md](docs/macos.md).
 
 To upgrade:
 ```sh
@@ -238,7 +238,7 @@ Every example supports `--direct` (direct connection) and `--proxy http://127.0.
 
 ## 📏 Scope & limitations
 
-ruyiJS provides JavaScript execution and a broad Web API environment on **Windows x64**, and as a source build on **macOS arm64**. It has **no browser window and no full page layout or rendering** — it is a tool for automation, analysis, and research. Use it in compliance with the terms of service of any site you interact with and with applicable law. The macOS comparison with Windows and the follow-up plan are in [docs/macos.md](docs/macos.md).
+ruyiJS provides JavaScript execution and a broad Web API environment on **Windows x64**, and on **macOS arm64** as a source build or a fork-release wheel. It has **no browser window and no full page layout or rendering** — it is a tool for automation, analysis, and research. Use it in compliance with the terms of service of any site you interact with and with applicable law. The macOS comparison with Windows and the follow-up plan are in [docs/macos.md](docs/macos.md).
 
 **Related:** [**ruyiHttp**](https://gitee.com/losenine888/ruyiHttp) — a Requests-style Python HTTP library built on Firefox's native networking components.
 
@@ -253,7 +253,7 @@ Python 3.10 and above on Windows x64 (64-bit), tested up to Python 3.14. The mac
 <details>
 <summary><b>Does it work on macOS or Linux?</b></summary>
 
-macOS arm64 is supported as a source build and as a local `macosx_26_0_arm64` wheel. That wheel is not uploaded to PyPI. The Windows comparison and the follow-up plan are in [docs/macos.md](docs/macos.md). Linux is not supported.
+macOS arm64 is supported as a source build and as a `macosx_26_0_arm64` wheel. That wheel is not uploaded to PyPI. The maintainer fork release `v0.2.1` carries the wheel and `ruyijs-runtime-macos-arm64.zip`. The Windows comparison and the follow-up plan are in [docs/macos.md](docs/macos.md). Linux is not supported.
 
 The JS engine is Mozilla's official **SpiderMonkey** and the networking stack is Mozilla's official **Necko** — both are built from the Firefox source tree and kept outside this repository.
 </details>

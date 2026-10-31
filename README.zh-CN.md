@@ -40,7 +40,7 @@ Headless Chrome 和 Playwright 给你的是一整个浏览器：一个负责 GPU
 
 如果你做网页抓取、逆向 Web JavaScript，或采集 challenge 背后的数据，它就适合你。如果普通 HTTP 客户端已经能拿到页面，那就不需要它。
 
-Windows x64 以 wheel 发布，需要 **Python 3.10+**（已在 Python 3.14 下验证）。macOS arm64 走源码构建；donor 布局和仍然留空的表面写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
+Windows x64 以 wheel 发布，需要 **Python 3.10+**（已在 Python 3.14 下验证）。macOS arm64 可以源码构建，fork Release 上也有 wheel；donor 布局和仍然留空的表面写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
 
 ## 📦 安装
 
@@ -52,7 +52,7 @@ python -m pip install ruyijs
 
 Windows 的 wheel 内置 SHA256 锁定的 SpiderMonkey + Necko 运行时（约 42 MB），安装后即可离线运行，无需下载浏览器，无外部依赖。
 
-**macOS arm64** 不使用这个 wheel。它用 Python 3.12 从源码构建，并依赖放在仓库外面的两份官方 Firefox donor。这一轮查过的页面路径是直连 HTTPS 上的 HTTP/2。ALPN 为 `http/1.1` 时会写 HTTP/1.1，这一段做过单元测试，没有对活的源打开过。步骤和未完成的表面见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
+**macOS arm64** 不使用这个 PyPI wheel。它用 Python 3.12 从源码构建，并依赖放在仓库外面的两份官方 Firefox donor，也可以安装维护者 fork Release `v0.2.1` 上的 `macosx_26_0_arm64` wheel。这个 wheel 不在 PyPI。这一轮查过的页面路径是直连 HTTPS 上的 HTTP/2。ALPN 为 `http/1.1` 时会写 HTTP/1.1，这一段做过单元测试，没有对活的源打开过。步骤和未完成的表面见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
 
 升级：
 ```sh
@@ -238,7 +238,7 @@ python -m ruyijs.examples creepjs              # CreepJS 指纹审计
 
 ## 📏 使用范围与限制
 
-ruyiJS 在 **Windows x64** 上提供 JavaScript 执行及广泛的 Web API 环境，**macOS arm64** 则通过源码构建提供同一外壳。它**不含浏览器窗口，也没有完整的页面布局与渲染** —— 它是面向自动化、分析与研究的工具。请在遵守目标站点服务条款与适用法律的前提下使用。macOS 与 Windows 的比对和后续计划见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
+ruyiJS 在 **Windows x64** 上提供 JavaScript 执行及广泛的 Web API 环境，**macOS arm64** 则通过源码构建或 fork Release 的 wheel 提供同一外壳。它**不含浏览器窗口，也没有完整的页面布局与渲染** —— 它是面向自动化、分析与研究的工具。请在遵守目标站点服务条款与适用法律的前提下使用。macOS 与 Windows 的比对和后续计划见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
 
 **相关项目：** [**ruyiHttp**](https://gitee.com/losenine888/ruyiHttp) —— 基于 Firefox 原生网络组件的 Requests 风格 Python 请求库。
 
@@ -253,7 +253,7 @@ Windows x64（64 位）上的 Python 3.10 及以上版本，已测试至 Python 
 <details>
 <summary><b>支持 macOS 或 Linux 吗？</b></summary>
 
-macOS arm64 可以用源码构建，也可以打本地的 `macosx_26_0_arm64` wheel。这个 wheel 不上传到 PyPI。和 Windows 的比对以及后续计划写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。Linux 尚未支持。
+macOS arm64 可以用源码构建，也可以打 `macosx_26_0_arm64` wheel。这个 wheel 不上传到 PyPI。维护者 fork 的 Release `v0.2.1` 放着这份 wheel 和 `ruyijs-runtime-macos-arm64.zip`。和 Windows 的比对以及后续计划写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。Linux 尚未支持。
 
 JS 引擎是 Mozilla 官方的 **SpiderMonkey**，网络库是 Mozilla 官方的 **Necko**。两者都从 Firefox 源码树编译，并且放在本仓库外面。
 </details>

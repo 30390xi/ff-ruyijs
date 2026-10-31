@@ -7,10 +7,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- `docs/macos.md` and `docs/macos.zh-CN.md` record the 0.2.1 comparison. The C client install name is `@rpath`. `Context(tls=)` reaches the xpcshell environment and is not read there. HTTP/3 stays version 20 with the socket process off.
+- `docs/macos.md` and `docs/macos.zh-CN.md` record the 0.2.1 comparison. The C client install name is `@rpath`. `Context(tls=)` reaches the xpcshell environment and is not read there. Same-process HTTP/3 can be version 30 after a remembered `Alt-Svc`. The socket process stays off.
 - macOS arm64 source build of the shell. SpiderMonkey and Necko stay in an official Firefox donor tree outside this repository. Maintainer steps and the verified HTTP/1.1 and HTTP/2 path are in `docs/macos.md` and `docs/macos.zh-CN.md`.
 - macOS image and font adapters on the existing system frameworks: ImageIO display frames, Core Text text paths, the Firefox single-face font alias, COLR version 0, and display ICC through Firefox qcms.
-- A local macOS wheel lays the shell out at `_runtime/dist/js` and copies the donor xpcshell closure to `_runtime/dist/necko`. `requests`, `brotli`, and `zstandard` are Darwin package dependencies. `runtime.json` stores the archive size and sha256 and leaves the macOS URL empty.
+- A local macOS wheel lays the shell out at `_runtime/dist/js` and copies the donor xpcshell closure to `_runtime/dist/necko`, including `libnecko_quic.dylib` when that library exists. The wheel also includes `necko/closed_route.py`, `necko/core_client.py`, and `necko_win`. `requests`, `brotli`, and `zstandard` are Darwin package dependencies. `runtime.json` stores the archive size, sha256, and the fork-release URL. The wheel is not uploaded to PyPI.
 - `tools/bootstrap_macos_helper.py` creates the gitignored Necko helper venv with Python 3.12 and the packages `requests`, `brotli`, and `zstandard`. An existing venv is left in place.
 
 ### Changed

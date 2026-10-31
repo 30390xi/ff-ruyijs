@@ -2,11 +2,15 @@
 //!
 //! Python owns the UDP socket and certificate decision. This library does not
 //! start a socket process and does not link neqo_glue. Profile numbers are
-//! read from the JSON object the caller already built.
+//! read from the JSON object the caller already built. ClientHello groups,
+//! extra key shares, signature schemes, certificate compression, and ECH grease
+//! are applied from that same object while the QUIC connection is still in
+//! Init. Transport-parameter order and the Initial padding bonus are carried
+//! on the session and applied when a datagram is sent.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ffi::{CStr, CString};
+use std::ffi::{CStr, CString, c_void};
 use std::net::SocketAddr;
 use std::os::raw::{c_char, c_int};
 use std::rc::Rc;
@@ -21,10 +25,11 @@ use neqo_http3::{
 };
 use neqo_transport::streams::SendGroupId;
 use neqo_transport::{
-    AppError, CloseReason, ConnectionParameters, Output, RandomConnectionIdGenerator, StreamId,
-    StreamType, Version,
+    AppError, CloseReason, Connection, ConnectionParameters, Output, RandomConnectionIdGenerator,
+    StreamId, StreamType, Version, set_client_hello_adjustments,
 };
 use nss::AuthenticationStatus;
+use nss::cert::CertificateCompressor;
 use serde_json::{Value, json};
 
 const VERSION_OK: &str = "neqo-0.32.0/nss-3.131";
@@ -39,6 +44,8 @@ struct Session {
     local: SocketAddr,
     remote: SocketAddr,
     profile: String,
+    tp_style: u8,
+    mtu_bonus: usize,
 }
 
 thread_local! {
@@ -132,6 +139,161 @@ fn apply_profile(profile: &Value) -> (ConnectionParameters, bool) {
     }
     let datagrams = json_bool(profile, "h3_datagram").unwrap_or(true);
     (params, datagrams)
+}
+
+const APPLE_COMPRESSION_ZLIB: u32 = 0x205;
+const APPLE_COMPRESSION_BROTLI: u32 = 0xB02;
+
+unsafe extern "C" {
+    fn compression_decode_buffer(
+        dst: *mut u8,
+        dst_size: usize,
+        src: *const u8,
+        src_size: usize,
+        scratch: *mut c_void,
+        algorithm: u32,
+    ) -> usize;
+
+    fn ZSTD_decompress(
+        dst: *mut c_void,
+        dst_capacity: usize,
+        src: *const c_void,
+        compressed_size: usize,
+    ) -> usize;
+
+    fn ZSTD_isError(code: usize) -> u32;
+}
+
+fn compression_rejected() -> nss::Res<()> {
+    Err(nss::Error::CertificateDecoding)
+}
+
+fn decode_apple(algorithm: u32, input: &[u8], output: &mut [u8]) -> nss::Res<()> {
+    if input.is_empty() || output.is_empty() {
+        return compression_rejected();
+    }
+    let written = unsafe {
+        compression_decode_buffer(
+            output.as_mut_ptr(),
+            output.len(),
+            input.as_ptr(),
+            input.len(),
+            std::ptr::null_mut(),
+            algorithm,
+        )
+    };
+    if written == output.len() {
+        Ok(())
+    } else {
+        compression_rejected()
+    }
+}
+
+fn decode_zstd(input: &[u8], output: &mut [u8]) -> nss::Res<()> {
+    if input.is_empty() || output.is_empty() {
+        return compression_rejected();
+    }
+    let written = unsafe {
+        ZSTD_decompress(
+            output.as_mut_ptr().cast(),
+            output.len(),
+            input.as_ptr().cast(),
+            input.len(),
+        )
+    };
+    let failed = unsafe { ZSTD_isError(written) } != 0;
+    if failed || written != output.len() {
+        compression_rejected()
+    } else {
+        Ok(())
+    }
+}
+
+struct ZlibCertDecoder;
+struct BrotliCertDecoder;
+struct ZstdCertDecoder;
+
+impl CertificateCompressor for ZlibCertDecoder {
+    const ID: u16 = 1;
+    const NAME: &CStr = c"zlib";
+
+    fn decode(input: &[u8], output: &mut [u8]) -> nss::Res<()> {
+        decode_apple(APPLE_COMPRESSION_ZLIB, input, output)
+    }
+}
+
+impl CertificateCompressor for BrotliCertDecoder {
+    const ID: u16 = 2;
+    const NAME: &CStr = c"brotli";
+
+    fn decode(input: &[u8], output: &mut [u8]) -> nss::Res<()> {
+        decode_apple(APPLE_COMPRESSION_BROTLI, input, output)
+    }
+}
+
+impl CertificateCompressor for ZstdCertDecoder {
+    const ID: u16 = 3;
+    const NAME: &CStr = c"zstd";
+
+    fn decode(input: &[u8], output: &mut [u8]) -> nss::Res<()> {
+        decode_zstd(input, output)
+    }
+}
+
+fn u16_list(profile: &Value, key: &str) -> Result<Vec<u16>, String> {
+    let Some(items) = profile.get(key).and_then(Value::as_array) else {
+        return Ok(Vec::new());
+    };
+    let mut values = Vec::with_capacity(items.len());
+    for item in items {
+        let number = item.as_u64().ok_or_else(|| format!("HTTP/3 profile {key} is invalid"))?;
+        let value = u16::try_from(number).map_err(|_| format!("HTTP/3 profile {key} is invalid"))?;
+        values.push(value);
+    }
+    Ok(values)
+}
+
+fn apply_client_hello(conn: &mut Connection, profile: &Value) -> Result<(u8, usize), String> {
+    let groups = u16_list(profile, "groups")?;
+    if !groups.is_empty() {
+        conn.set_groups(&groups)
+            .map_err(|_| "HTTP/3 profile groups were rejected".to_string())?;
+    }
+    if let Some(shares) = json_u64(profile, "additional_key_shares") {
+        let count = usize::try_from(shares).map_err(|_| "HTTP/3 profile key shares were rejected".to_string())?;
+        conn.send_additional_key_shares(count)
+            .map_err(|_| "HTTP/3 profile key shares were rejected".to_string())?;
+    }
+    let signatures = u16_list(profile, "signatures")?;
+    if !signatures.is_empty() {
+        conn.set_signature_schemes(&signatures)
+            .map_err(|_| "HTTP/3 profile signatures were rejected".to_string())?;
+    }
+    if let Some(items) = profile.get("compression").and_then(Value::as_array) {
+        for item in items {
+            let ident = item.as_u64().ok_or("HTTP/3 profile compression is invalid")?;
+            let registered = match ident {
+                1 => conn.set_certificate_compression::<ZlibCertDecoder>(),
+                2 => conn.set_certificate_compression::<BrotliCertDecoder>(),
+                3 => conn.set_certificate_compression::<ZstdCertDecoder>(),
+                _ => return Err("HTTP/3 profile compression is invalid".to_string()),
+            };
+            registered.map_err(|_| "HTTP/3 profile compression was rejected".to_string())?;
+        }
+    }
+    if json_bool(profile, "grease_ech") == Some(true) {
+        conn.client_enable_ech(&[] as &[u8])
+            .map_err(|_| "HTTP/3 profile ECH grease was rejected".to_string())?;
+    }
+    let style = u8::try_from(json_u64(profile, "tp_style").unwrap_or(0))
+        .map_err(|_| "HTTP/3 profile transport style is invalid".to_string())?;
+    if style > 3 {
+        return Err("HTTP/3 profile transport style is invalid".to_string());
+    }
+    let mtu_bonus = usize::try_from(json_u64(profile, "mtu_bonus").unwrap_or(0))
+        .map_err(|_| "HTTP/3 profile datagram pad is invalid".to_string())?;
+    set_client_hello_adjustments(style, mtu_bonus);
+    Ok((style, mtu_bonus))
 }
 
 fn stream_id(value: u64) -> StreamId {
@@ -588,6 +750,7 @@ fn send_payload(fd: i32, data: &[u8]) -> Result<(), String> {
 }
 
 fn pump(session: &mut Session) -> Result<f64, String> {
+    set_client_hello_adjustments(session.tp_style, session.mtu_bonus);
     let fd = session.fd.ok_or("HTTP/3 socket is not attached")?;
     let now = Instant::now();
     loop {
@@ -632,15 +795,18 @@ fn command_new(body: &Value) -> Result<Value, String> {
         .connection_parameters(params)
         .http3_datagram(h3_datagram)
         .webtransport(webtransport);
-    let client = Http3Client::new(
+    let mut connection = Connection::new_client(
         host,
+        &["h3"],
         Rc::new(RefCell::new(RandomConnectionIdGenerator::new(8))),
         local,
         remote,
-        http3,
+        http3.get_connection_parameters().clone(),
         Instant::now(),
     )
     .map_err(|error| error.to_string())?;
+    let (tp_style, mtu_bonus) = apply_client_hello(&mut connection, &profile)?;
+    let client = Http3Client::new_with_conn(connection, http3);
     let handle = NEXT_HANDLE.with(|slot| {
         let mut next = slot.borrow_mut();
         let handle = *next;
@@ -656,6 +822,8 @@ fn command_new(body: &Value) -> Result<Value, String> {
                 local,
                 remote,
                 profile: profile.to_string(),
+                tp_style,
+                mtu_bonus,
             },
         );
     });

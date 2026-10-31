@@ -95,12 +95,23 @@ def _install_darwin_helper(build_lib, project):
         build_lib / "ruyijs_necko/webtransport_verify.py": source / "webtransport_verify.py",
         build_lib / "ruyijs_necko/webtransport_session.py": source / "webtransport_session.py",
         build_lib / "ruyijs_necko/webtransport_connection.py": source / "webtransport_connection.py",
+        build_lib / "necko/closed_route.py": source / "necko_closed_route.py",
+        build_lib / "necko/core_client.py": source / "necko_core_client.py",
     }
     for dest, src in mapping.items():
         if not src.is_file():
             raise FileNotFoundError(src)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(src.read_bytes())
+    win_source = project / "native/necko_tls/necko_win"
+    if not win_source.is_dir():
+        raise FileNotFoundError(win_source)
+    for item in sorted(win_source.iterdir()):
+        if not item.is_file() or item.suffix == ".pyc":
+            continue
+        dest = build_lib / "necko_win" / item.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(item.read_bytes())
 
 
 def _platform_tag():
