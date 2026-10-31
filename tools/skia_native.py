@@ -6,6 +6,7 @@ only the members canvas drawing reaches. src/web_canvas/skia_target.cpp is the
 one product unit compiled against the Skia headers of the same source tree.
 """
 import hashlib
+import sys
 import json
 from pathlib import Path
 
@@ -22,19 +23,25 @@ def digest(path):
 
 def compile_flags(donor, root, directory):
     skia = donor.src / 'gfx/skia'
+    includes = ['-I' + str(skia), '-I' + str(skia / 'skia'), '-I' + str(donor.obj / 'dist/include'),
+                '-I' + str(root / 'src'), '-I' + str(directory)]
+    if sys.platform == 'darwin':
+        # The browser objdir already compiled these objects as C++20.
+        # font_backend.h pulls HarfBuzz for the Core Text face used as a typeface.
+        return ['-std=c++20', '-O2', '-fno-exceptions', '-DNDEBUG=1', '-DTRIMMED=1',
+                '-DSK_BUILD_FOR_MAC',
+                '-I' + str(donor.src / 'gfx/harfbuzz/src'), *includes]
     return ['-std:c++20', '-MD', '-O2', '-GR-', '-D_HAS_EXCEPTIONS=0', '-Zc:sizedDealloc-',
-            '-Xclang', '-ffp-contract=off', *FLAGS,
-            '-I' + str(skia), '-I' + str(skia / 'skia'), '-I' + str(donor.obj / 'dist/include'),
-            '-I' + str(root / 'src'), '-I' + str(directory)]
+            '-Xclang', '-ffp-contract=off', *FLAGS, *includes]
 
 
 def objects_dir(gfx_obj):
     folder = Path(gfx_obj) / 'gfx/skia'
-    objs = sorted(folder.glob('*.obj'))
+    pattern = '*.o' if sys.platform == 'darwin' else '*.obj'
+    objs = sorted(folder.glob(pattern))
     if not objs:
         raise ValueError(f'no Skia objects under {folder}: --firefox-gfx-obj must be a '
-                         'Firefox browser build objdir (the one whose dist/bin/firefox.exe '
-                         'is the reference)')
+                         'Firefox browser build objdir')
     return folder, objs
 
 
@@ -54,13 +61,16 @@ def build(native, gfx_obj):
     identity = {'objects': {p.name: digest(p) for p in objs},
                 'librarian': digest(librarian), 'builder': digest(__file__)}
     signature = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
-    library = directory / 'firefox_skia.lib'
+    library = directory / ('libfirefox_skia.a' if sys.platform == 'darwin' else 'firefox_skia.lib')
     stamp = directory / 'build.json'
     if stamp.is_file() and library.is_file() and not native.incremental['disabled']:
         old = json.loads(stamp.read_text('utf8'))
         if old.get('signature') == signature and old.get('library') == digest(library):
             return [library]
-    native.run([librarian, *lib_prefix, '-OUT:' + str(library), *map(str, objs)], 'archive_skia')
+    if sys.platform == 'darwin':
+        native.run(native.archive(library, objs), 'archive_skia')
+    else:
+        native.run([librarian, *lib_prefix, '-OUT:' + str(library), *map(str, objs)], 'archive_skia')
     version = None
     if milestone.is_file():
         for line in milestone.read_text('utf8', errors='replace').splitlines():

@@ -15,7 +15,8 @@ import subprocess
 import tomllib
 from pathlib import Path
 
-TARGET = 'x86_64-pc-windows-msvc'
+def target_triple(native):
+    return native.donor.rust_target
 
 
 def digest(path):
@@ -73,9 +74,9 @@ def build(native):
             (index[(name, version)] / '.cargo-checksum.json').read_text('utf8')).get('package')
             for name, version in wanted},
         'rustcSHA256': digest(rustc), 'cargoSHA256': digest(cargo),
-        'librarianSHA256': digest(librarian), 'target': TARGET}
+        'librarianSHA256': digest(librarian), 'target': target_triple(native)}
     signature = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
-    library = directory / 'ruyijs_urlpattern.lib'
+    library = native.static_library(directory, 'ruyijs_urlpattern')
     stamp = directory / 'build.json'
     if stamp.is_file():
         old = json.loads(stamp.read_text('utf8'))
@@ -100,7 +101,7 @@ def build(native):
     # donor would be linked beside the new ones; start from an empty target.
     if target_dir.exists():
         shutil.rmtree(target_dir)
-    command = [cargo, 'build', '--release', '--offline', '--locked', '--target', TARGET,
+    command = [cargo, 'build', '--release', '--offline', '--locked', '--target', target_triple(native),
                '--manifest-path', str(source / 'Cargo.toml'), '--target-dir', str(target_dir),
                '--config', "source.crates-io.replace-with='donor'",
                '--config', "source.donor.directory='" + mirror.as_posix() + "'"]
@@ -108,10 +109,10 @@ def build(native):
     (directory / 'cargo.log').write_text(completed.stdout + completed.stderr, 'utf8')
     if completed.returncode:
         raise RuntimeError('urlpattern cargo build: ' + (completed.stdout + completed.stderr)[-10000:])
-    rlibs = sorted(str(p) for p in (target_dir / TARGET / 'release/deps').glob('*.rlib'))
+    rlibs = sorted(str(p) for p in (target_dir / target_triple(native) / 'release/deps').glob('*.rlib'))
     if library.exists():
         library.unlink()
-    archived = subprocess.run([librarian, *lib_prefix, '-OUT:' + str(library), *rlibs], cwd=directory, env=env,
+    archived = subprocess.run(native.archive(library, rlibs), cwd=directory, env=env,
                               capture_output=True, text=True)
     (directory / 'archive.log').write_text(archived.stdout + archived.stderr, 'utf8')
     if archived.returncode:

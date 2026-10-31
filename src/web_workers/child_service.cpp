@@ -3,7 +3,18 @@
 #include "web_workers/clone.h"
 #include "runtime/pipe.h"
 #include "jsapi.h"
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include <chrono>
+#include <cstdint>
+#include <unistd.h>
+using ULONGLONG = uint64_t;
+inline ULONGLONG GetTickCount64() {
+  return ULONGLONG(std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+#endif
 
 namespace ruyijs::web_workers {
 PipeResult Child::NextFrame(std::string* frame, bool* received) {
@@ -41,7 +52,11 @@ bool Child::Exchange(std::string_view request, std::string* reply) {
       deferredBytes_ += frame.size();
       deferred_.push_back(std::move(frame));
     } else if (status == PipeResult::Closed || status == PipeResult::Failed) break;
+#ifdef _WIN32
     else Sleep(2);
+#else
+    else usleep(2000);
+#endif
   }
   closed_ = true;
   return WebKit::Fail(cx_, "Worker service channel closed, exceeded its queue, or timed out");

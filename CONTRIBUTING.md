@@ -27,15 +27,17 @@ relevant [owner record](./docs/owners) first. The essentials:
 ## Pull request checklist
 
 - [ ] The owner record (bounded context, state source, factory, installer, tests) is updated for API changes
-- [ ] `js.exe` and `ruyijs_client.dll` are rebuilt (`python -B tools/build.py ...`)
+- [ ] When C++ changes, the shell is rebuilt (`js.exe` on Windows, `js` on macOS) together with the client library (`python -B tools/build.py ...`)
 - [ ] Behaviour is checked through both Python and the C ABI
 - [ ] Tests cover the owner, descriptors/prototypes, invalid receivers and realm behaviour, not just "it exists"
 - [ ] The diff contains no build outputs, captures, logs, credentials or proxy details
 
 ## Reporting issues
 
-Please include the ruyijs version or commit, your Windows version, a minimal script, the
-actual output and, where possible, what real Firefox returns for the same code.
+Please include the ruyijs version or commit, your Windows version or your macOS version
+and Xcode version, the Firefox tag, and which of the two donor objdirs the build used.
+Also include a minimal script, the actual output and, where possible, what real Firefox
+returns for the same code. macOS maintainers follow [docs/macos.md](./docs/macos.md).
 
 ff-ruyijs is dual-licensed under the [AGPL-3.0](./LICENSE) and a
 [commercial license](./COMMERCIAL-LICENSE.md). By submitting a contribution you

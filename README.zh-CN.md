@@ -40,7 +40,7 @@ Headless Chrome 和 Playwright 给你的是一整个浏览器：一个负责 GPU
 
 如果你做网页抓取、逆向 Web JavaScript，或采集 challenge 背后的数据，它就适合你。如果普通 HTTP 客户端已经能拿到页面，那就不需要它。
 
-运行于 **Windows x64**，需要 **Python 3.10+**（已在 Python 3.14 下验证）。wheel 内置锁定版原生运行时，无需再下载任何东西。
+Windows x64 以 wheel 发布，需要 **Python 3.10+**（已在 Python 3.14 下验证）。macOS arm64 走源码构建；donor 布局和仍然留空的表面写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
 
 ## 📦 安装
 
@@ -50,7 +50,9 @@ python -m pip install ruyijs
 
 **系统要求：** Windows x64（64 位）+ Python 3.10+，已在 Python 3.10 – 3.14 下验证。
 
-wheel 内置 SHA256 锁定的 SpiderMonkey + Necko 运行时（约 42 MB），安装后即可离线运行，无需下载浏览器，无外部依赖。
+Windows 的 wheel 内置 SHA256 锁定的 SpiderMonkey + Necko 运行时（约 42 MB），安装后即可离线运行，无需下载浏览器，无外部依赖。
+
+**macOS arm64** 不使用这个 wheel。它用 Python 3.12 从源码构建，并依赖放在仓库外面的两份官方 Firefox donor。这一轮查过的页面路径是直连 HTTPS 上的 HTTP/2。ALPN 为 `http/1.1` 时会写 HTTP/1.1，这一段做过单元测试，没有对活的源打开过。步骤和未完成的表面见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
 
 升级：
 ```sh
@@ -60,7 +62,7 @@ python -m pip install --upgrade ruyijs
 验证安装：
 ```python
 import ruyijs
-print(ruyijs.__version__)   # 0.1.6
+print(ruyijs.__version__)   # 0.2.1
 ```
 
 ## 🚀 快速开始
@@ -139,7 +141,7 @@ with Context() as context:
 
 ### 基于 Necko 的原生网络
 
-页面内 `fetch` 与 XHR 走真实 HTTP/1.1、2、3，并通过按上下文隔离的代理。用 `put_resource()` 自行提供响应即可离线复跑整条已捕获的流程。用 `net_log()` 查看每一次请求。
+页面内 `fetch` 与 XHR 走真实 HTTP/1.1、2、3，并通过按上下文隔离的代理。用 `put_resource()` 自行提供响应即可离线复跑整条已捕获的流程。用 `net_log()` 查看每一次请求。macOS 源码构建这一轮查过的页面路径是直连 HTTPS 上的 HTTP/2，界限见 `docs/macos.zh-CN.md`。
 
 ### 原生 TLS 指纹 —— 自由切换 Firefox 100 – 159
 
@@ -147,7 +149,7 @@ with Context() as context:
 
 Necko 传输层可**自由切换 Firefox 100 – 159 的 TLS 配置**，每个版本均精确复现该版本的 ClientHello，在线上呈现不同的 JA3 / JA4 指纹——可用于轮换浏览器身份、规避按版本封禁，或测试站点对不同 Firefox 版本的反应。
 
-每个 Context 用 `tls=` 选择版本（`"100"`–`"159"`，默认 159）。它只改变该 Context 的 Necko 传输层的 TLS ClientHello、HTTP/2 设置和 HTTP/3 优先级；如需页面内一致，请用 `configure_fingerprint` 设置对应版本的 User-Agent。
+每个 Context 用 `tls=` 选择版本（`"100"`–`"159"`，默认 159）。在 Windows 上，这会改变该 Context 的 Necko 传输层的 TLS ClientHello、HTTP/2 设置和 HTTP/3 优先级；如需页面内一致，请用 `configure_fingerprint` 设置对应版本的 User-Agent。在 macOS 上，库报告 NSS 3.131 时，直连 HTTPS 走 arm64 `libnecko_core.dylib`。外壳先找 `dist/necko_tls/libnecko_core.dylib`，再找暂存的 `dist/necko` 副本。已经设置的 `NECKO_CORE_LIBRARY` 优先。`Context()` 和 `Context(tls="100")` 都打开了 `https://example.com/`，状态 200，协议 `h2`。测到的握手是 159 为 15 个套件、5 个组、3 个 key share，100 为 17、6、2。簇边界 100、119、132、135、151、154、156、159 的库内 GET 也返回 200 和 `h2`，个数与配置表一致。其余版本没有逐个当页面打开。调用方没写的请求头和 HTTP/2 设置跟随 0.2.1 产品表里这个 `tls=` 的值。调用方写了的头优先。这份表里的 HTTP/3 字段不用，HTTP/3 也没有变。代理、库缺失或 NSS 版本不同仍走 donor xpcshell。这次没有重测代理。明文 HTTP 仍从这份 donor 返回 `necko 804b0033`（`docs/tls-profile.zh-CN.md`）。
 
 ```python
 with Context(proxy="http://127.0.0.1:7890", timeout=30, tls="120") as context:
@@ -236,7 +238,7 @@ python -m ruyijs.examples creepjs              # CreepJS 指纹审计
 
 ## 📏 使用范围与限制
 
-ruyiJS 提供 **Windows x64** 上的 JavaScript 执行及广泛的 Web API 环境，**不含浏览器窗口，也没有完整的页面布局与渲染** —— 它是面向自动化、分析与研究的工具。请在遵守目标站点服务条款与适用法律的前提下使用。
+ruyiJS 在 **Windows x64** 上提供 JavaScript 执行及广泛的 Web API 环境，**macOS arm64** 则通过源码构建提供同一外壳。它**不含浏览器窗口，也没有完整的页面布局与渲染** —— 它是面向自动化、分析与研究的工具。请在遵守目标站点服务条款与适用法律的前提下使用。macOS 与 Windows 的比对和后续计划见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。
 
 **相关项目：** [**ruyiHttp**](https://gitee.com/losenine888/ruyiHttp) —— 基于 Firefox 原生网络组件的 Requests 风格 Python 请求库。
 
@@ -245,21 +247,21 @@ ruyiJS 提供 **Windows x64** 上的 JavaScript 执行及广泛的 Web API 环�
 <details>
 <summary><b>支持哪些 Python 版本？</b></summary>
 
-Windows x64（64 位）上的 Python 3.10 及以上版本，已测试至 Python 3.14。
+Windows x64（64 位）上的 Python 3.10 及以上版本，已测试至 Python 3.14。macOS 源码构建的 Necko helper 使用 Python 3.12。
 </details>
 
 <details>
 <summary><b>支持 macOS 或 Linux 吗？</b></summary>
 
-暂不支持，目前仅限 Windows x64。跨平台支持在计划中。
+macOS arm64 可以用源码构建，也可以打本地的 `macosx_26_0_arm64` wheel。这个 wheel 不上传到 PyPI。和 Windows 的比对以及后续计划写在 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。Linux 尚未支持。
 
-JS 引擎使用的是 Mozilla 官方的 **SpiderMonkey**，网络库使用的是 Mozilla 官方的 **Necko** —— 均直接从 Firefox 源码树中抽取。你可以自行从 [mozilla-central](https://hg.mozilla.org/mozilla-central/) 拉取并编译。ruyijs 在此基础上的定制化修改不影响引擎核心功能，因此在 Linux 或 macOS 上原生编译的 SpiderMonkey + Necko 可以作为移植的基础。
+JS 引擎是 Mozilla 官方的 **SpiderMonkey**，网络库是 Mozilla 官方的 **Necko**。两者都从 Firefox 源码树编译，并且放在本仓库外面。
 </details>
 
 <details>
 <summary><b>需要下载浏览器吗？</b></summary>
 
-不需要。wheel 内置了锁定版 SpiderMonkey + Necko 运行时，`pip install ruyijs` 后即可离线运行。
+Windows 不需要。wheel 内置锁定版 SpiderMonkey + Necko 运行时，`pip install ruyijs` 后即可离线运行。macOS 先在本仓库旁边编译两份 donor，之后 `setup.py` 可以打出本地 wheel，安装后从包内找到 `dist/js` 和 `dist/necko/xpcshell`。见 [docs/macos.zh-CN.md](docs/macos.zh-CN.md)。PyPI 上的 wheel 是 Windows 运行时。
 </details>
 
 <details>

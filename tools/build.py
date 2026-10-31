@@ -20,9 +20,9 @@ import binding_order
 import sanitizer_data
 import compression_native
 import urlpattern_native
+import image_native
 import rust_runtime
 import skia_native
-import image_native
 
 
 def arguments():
@@ -51,7 +51,13 @@ def arguments():
                         help="reuse every existing local object without recompiling")
     parser.add_argument("--jobs", type=int, choices=range(1, 129), default=min(os.cpu_count() or 4, 128),
                         help="independent compiler processes (default: CPU count)")
+    parser.add_argument("--necko-core-only", action="store_true",
+                        help="build dist/necko_tls/libnecko_core.dylib and skip the shell")
     args = parser.parse_args()
+    if args.necko_core_only:
+        if not args.firefox_gfx_obj:
+            parser.error("--firefox-gfx-obj (or RUYIJS_FIREFOX_GFX_OBJ) is required")
+        return args
     if not args.donor_obj:
         parser.error("--donor-obj (or RUYIJS_DONOR_OBJ) is required")
     if not args.pristine and not args.firefox_gfx_obj:
@@ -67,9 +73,155 @@ def local_directory(root, relative):
     return path
 
 
+def build_necko_core(root, necko_obj):
+    """Link libnecko_core.dylib against the donor NSS next to xpcshell.
+
+    The dylib's rpath is @loader_path. Symlinks beside it let a local probe
+    load NSS without rewriting the donor binaries.
+    """
+    necko_obj = Path(necko_obj)
+    libdir = necko_obj / "dist" / "bin"
+    include = necko_obj / "dist" / "include"
+    nspr_source = necko_obj.parent / "nsprpub" / "pr" / "include"
+    sources = [
+        root / "native" / "necko_tls" / "necko_tls.c",
+        root / "native" / "necko_tls" / "necko_exchange.c",
+    ]
+    for source in sources:
+        if not source.is_file():
+            raise FileNotFoundError(source)
+    if not (libdir / "libnss3.dylib").is_file():
+        raise FileNotFoundError(libdir / "libnss3.dylib")
+    if not (nspr_source / "obsolete" / "protypes.h").is_file():
+        raise FileNotFoundError(nspr_source / "obsolete" / "protypes.h")
+    out = local_directory(root, "dist/necko_tls")
+    output = out / "libnecko_core.dylib"
+    command = [
+        "clang", "-dynamiclib", "-O2", "-Wall", "-Wextra", "-fvisibility=hidden",
+        "-DXP_DARWIN", "-DXP_UNIX", "-D__APPLE__",
+        "-arch", "arm64",
+        "-I", str(include / "nss"),
+        "-I", str(include / "nspr"),
+        "-I", str(nspr_source),
+        *[str(source) for source in sources],
+        "-L", str(libdir),
+        "-lnss3",
+        "-Wl,-rpath,@loader_path",
+        "-Wl,-install_name,@rpath/libnecko_core.dylib",
+        "-o", str(output),
+    ]
+    subprocess.run(command, check=True)
+    for name in ("libnss3.dylib", "libmozglue.dylib", "libfreebl3.dylib", "libsoftokn3.dylib"):
+        link = out / name
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to((libdir / name).resolve())
+    return output
+
+
+def install_network_helper(root, deployed):
+    """Copy owned Necko helper sources into an existing venv.
+
+    Windows receives oneshot.py only. Darwin also receives the xpcshell
+    adapter. A missing venv is reported and does not create a release package.
+    """
+    oneshot_source = root / "src/resource_network/necko_oneshot.py"
+    venv = root / "vendor/necko-derived/python"
+    package_dirs = []
+    windows_package = venv / "Lib/site-packages/ruyijs_necko"
+    if windows_package.is_dir():
+        package_dirs.append(windows_package)
+    package_dirs += [path for path in sorted(venv.glob("lib/python*/site-packages/ruyijs_necko"))
+                     if path.is_dir()]
+    if sys.platform == "darwin":
+        for site in sorted(venv.glob("lib/python*/site-packages")):
+            if not site.is_dir():
+                continue
+            package = site / "ruyijs_necko"
+            necko_dir = site / "necko"
+            package.mkdir(exist_ok=True)
+            necko_dir.mkdir(exist_ok=True)
+            if package not in package_dirs:
+                package_dirs.append(package)
+    deployed_oneshot = None
+    for package in package_dirs:
+        if not package.is_dir():
+            continue
+        oneshot = package / "oneshot.py"
+        oneshot.write_bytes(oneshot_source.read_bytes())
+        deployed.append(oneshot)
+        deployed_oneshot = oneshot
+    report = {"source": str(oneshot_source),
+              "deployed": str(deployed_oneshot) if deployed_oneshot else None}
+    if deployed_oneshot is not None:
+        report["sha256"] = digest(deployed_oneshot)
+    if sys.platform != "darwin":
+        return report
+    sites = []
+    for package in package_dirs:
+        necko_dir = package.parent / "necko"
+        if package.is_dir() and necko_dir.is_dir():
+            sites.append((package, necko_dir))
+    if not sites:
+        report["missing"] = "helper venv"
+        print("helper venv is missing; js stays linked and no release package was created")
+        return report
+    sources = (
+        root / "src/resource_network/necko_ruyi_init.py",
+        root / "src/resource_network/necko_timing.py",
+        root / "src/resource_network/necko_client.py",
+        root / "src/resource_network/necko_adapters.py",
+        root / "src/resource_network/necko_pkg_init.py",
+    )
+    installed = []
+    for package, necko_dir in sites:
+        targets = (
+            (package / "__init__.py", sources[0]),
+            (package / "timing.py", sources[1]),
+            (necko_dir / "client.py", sources[2]),
+            (necko_dir / "adapters.py", sources[3]),
+            (necko_dir / "__init__.py", sources[4]),
+        )
+        for target, source in targets:
+            target.write_bytes(source.read_bytes())
+            deployed.append(target)
+            installed.append(target)
+        core_source = root / "src/resource_network/necko_core_client.py"
+        if core_source.is_file():
+            copied = necko_dir / "core_client.py"
+            copied.write_bytes(core_source.read_bytes())
+            deployed.append(copied)
+            installed.append(copied)
+        closed_source = root / "src/resource_network/necko_closed_route.py"
+        if closed_source.is_file():
+            copied = necko_dir / "closed_route.py"
+            copied.write_bytes(closed_source.read_bytes())
+            deployed.append(copied)
+            installed.append(copied)
+        win_source = root / "native/necko_tls/necko_win"
+        if win_source.is_dir():
+            win_dest = necko_dir.parent / "necko_win"
+            win_dest.mkdir(exist_ok=True)
+            for source in sorted(win_source.iterdir()):
+                if not source.is_file() or source.suffix == ".pyc":
+                    continue
+                copied = win_dest / source.name
+                copied.write_bytes(source.read_bytes())
+                deployed.append(copied)
+                installed.append(copied)
+    report["darwin"] = [str(path) for path in installed]
+    return report
+
+
 def main():
     args = arguments()
     root = Path(__file__).resolve().parents[1]
+    if args.necko_core_only:
+        if sys.platform != "darwin":
+            raise SystemExit("libnecko_core is built on Darwin")
+        build_necko_core(root, args.firefox_gfx_obj)
+        print("dist/necko_tls/libnecko_core.dylib")
+        return 0
     mode = "pristine" if args.pristine else "runtime"
     directory = local_directory(root, "build/" + mode)
     destination = local_directory(root, os.environ.get("RUYIJS_DESTINATION", "dist/pristine" if args.pristine else "dist"))
@@ -82,7 +234,8 @@ def main():
         native = Native(donor, root, directory, args)
         objects = donor.objects()
         inputs = donor.source_inputs() + objects + donor.libraries()
-        inputs += [donor.obj / "dist/bin/js.exe", donor.obj / "dist/bin/mozglue.dll"]
+        inputs += [donor.obj / "dist/bin" / donor.shell_name,
+                   donor.obj / "dist/bin" / donor.glue_name]
         inputs += list((root / "tools").glob("*.py"))
         sources = []
         if not args.pristine:
@@ -120,11 +273,12 @@ def main():
             inputs += list((root / "docs").rglob("*.md"))
             inputs += [path for path in (root / "vendor/compression-native").rglob("*") if path.is_file()]
             inputs += [path for path in (root / "vendor/image-native").rglob("*") if path.is_file()]
+        shell_name = os.environ.get("RUYIJS_OUTPUT_NAME", donor.shell_name)
         report.update(donor=str(donor.obj), source=str(donor.src),
-                      executable=str(destination / "js.exe"),
+                      executable=str(destination / shell_name),
                       inputs=inventory(inputs),
                       compiler=native.compiler(), linker=native.linker(),
-                      include=native.env["INCLUDE"],
+                      include=native.env.get("INCLUDE", ""),
                       library_paths=donor.libpaths(args.vs_root),
                       runtime_dll_dir=args.runtime_dll_dir)
         if args.prepare_only:
@@ -132,7 +286,7 @@ def main():
             return 0
         native.check_tools(compile_needed=bool(sources))
         if sources:
-            original = donor.shell / "Unified_cpp_js_src_shell0.obj"
+            original = donor.shell / ("Unified_cpp_js_src_shell0" + donor.object_suffix)
             if objects.count(original) != 1:
                 raise ValueError("shell0 object must occur once in donor list")
             objects.remove(original)
@@ -142,11 +296,12 @@ def main():
                         exceptions=product_sources.needs_exceptions(source))
             with ThreadPoolExecutor(max_workers=args.jobs) as pool:
                 objects += list(pool.map(compile_unit, sources))
-        executable = destination / os.environ.get("RUYIJS_OUTPUT_NAME", "js.exe")
+        executable = destination / shell_name
         if not args.pristine:
             objects += compression_native.build(native)
             objects += urlpattern_native.build(native)
-            objects += rust_runtime.build(native)
+            if sys.platform != "darwin":
+                objects += rust_runtime.build(native)
             objects += skia_native.build(native, args.firefox_gfx_obj)
             objects += image_native.build(native)
             report["imageCodecs"] = json.loads((directory / "image-native/build.json").read_text("utf-8"))
@@ -166,18 +321,12 @@ def main():
             report["residency"] = previous["domains"]
         if not args.pristine:
             report["client"] = build_client(native, destination)
-            # Deploy the one owned source to the existing Necko transport path.
-            # The Necko Python runtime ships with releases, not the source tree;
-            # a checkout without it still builds js.exe and skips this deploy.
-            oneshot_source = root / "src/resource_network/necko_oneshot.py"
-            oneshot = root / "vendor/necko-derived/python/Lib/site-packages/ruyijs_necko/oneshot.py"
-            if oneshot.parent.is_dir():
-                oneshot.write_bytes(oneshot_source.read_bytes())
-                deployed.append(oneshot)
-                report["networkHelper"] = {"source": str(oneshot_source), "deployed": str(oneshot),
-                                           "sha256": digest(oneshot)}
-            else:
-                report["networkHelper"] = {"source": str(oneshot_source), "deployed": None}
+            if sys.platform == "darwin":
+                build_necko_core(root, args.firefox_gfx_obj)
+                report["neckoCore"] = "dist/necko_tls/libnecko_core.dylib"
+            # The Necko Python runtime ships with releases, not the source tree.
+            # A checkout without the helper venv still links the shell.
+            report["networkHelper"] = install_network_helper(root, deployed)
         report["incremental"] = native.incremental
         verify_unchanged(report["inputs"], rehash=True)
         version = subprocess.run([str(executable), "--version"], cwd=destination,

@@ -14,6 +14,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <cmath>
 
 namespace ruyijs::web_canvas {
 namespace {

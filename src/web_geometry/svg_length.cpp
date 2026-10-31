@@ -2,6 +2,7 @@
 #include "js/Exception.h"
 #include "js/Realm.h"
 #include "js/Wrapper.h"
+#include <cmath>
 
 namespace ruyijs::web_geometry {
 const JSClass kSvgLengthClass = {"SVGLength", JSCLASS_HAS_RESERVED_SLOTS(5)};

@@ -5,6 +5,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `docs/macos.md` and `docs/macos.zh-CN.md` record the 0.2.1 comparison. The C client install name is `@rpath`. `Context(tls=)` reaches the xpcshell environment and is not read there. HTTP/3 stays version 20 with the socket process off.
+- macOS arm64 source build of the shell. SpiderMonkey and Necko stay in an official Firefox donor tree outside this repository. Maintainer steps and the verified HTTP/1.1 and HTTP/2 path are in `docs/macos.md` and `docs/macos.zh-CN.md`.
+- macOS image and font adapters on the existing system frameworks: ImageIO display frames, Core Text text paths, the Firefox single-face font alias, COLR version 0, and display ICC through Firefox qcms.
+- A local macOS wheel lays the shell out at `_runtime/dist/js` and copies the donor xpcshell closure to `_runtime/dist/necko`. `requests`, `brotli`, and `zstandard` are Darwin package dependencies. `runtime.json` stores the archive size and sha256 and leaves the macOS URL empty.
+- `tools/bootstrap_macos_helper.py` creates the gitignored Necko helper venv with Python 3.12 and the packages `requests`, `brotli`, and `zstandard`. An existing venv is left in place.
+
+### Changed
+
+- On Darwin, `tools/build.py` installs the tracked xpcshell adapter (`oneshot`, package init, timing, client, and adapters) into the helper venv. Windows still receives `oneshot.py` only. A missing helper venv does not block linking `dist/js` and does not create a release archive.
+- Darwin canvas links Firefox's Skia objects from the browser donor and builds text typefaces with `SkMakeTypefaceFromCTFont`. The `--timing-v3` trailer now carries eight values. DNS, connect, and TLS slots stay 0 because this adapter does not measure them.
+
+### Fixed
+
+- The Windows family/language cache key in `font_collection.cpp` is a `'\0'` separator again, so that half compiles. The macOS key stays a newline. `requests`, `brotli`, and `zstandard` stay Darwin dependencies.
+- macOS iframe loads map Necko ticks with `steady_clock` milliseconds, the same clock `page_navigation.cpp` already uses. Windows keeps `QueryPerformanceCounter`.
+
 ### Changed
 
 - **License:** ff-ruyijs is now dual-licensed under the AGPL-3.0-only or a commercial

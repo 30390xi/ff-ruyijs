@@ -1,6 +1,7 @@
 // A port of the parts of gfx/2d/DrawTargetSkia.cpp a canvas FillRect runs:
 // GradientStopsSkia, SetPaintPattern, AutoPaintSetup and FillRect, drawing
 // into Firefox's Skia with the B8G8R8A8 premultiplied surface it uses.
+#ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -9,11 +10,15 @@
 #endif
 #include <windows.h>
 #include <dwrite.h>
-// Firefox's Skia archive carries the GDI typeface (Uniscribe) beside DirectWrite.
 #pragma comment(lib, "dwrite.lib")
 #pragma comment(lib, "usp10.lib")
+#endif
 
 #include "web_canvas/skia_target.h"
+#ifndef _WIN32
+#include "web_geometry/font_backend.h"
+#include "include/ports/SkTypeface_mac.h"
+#endif
 #include "web_geometry/glyph_mask.h"
 
 #include <algorithm>
@@ -1214,8 +1219,10 @@ bool DrawImage(const Surface& surface, const double transform[6], const Image& i
   return true;
 }
 
-// ---- Text: ScaledFontDWrite + DrawTargetSkia::DrawGlyphs ----
+// ---- Text: DrawTargetSkia::DrawGlyphs. Windows uses ScaledFontDWrite.
+// Darwin uses the Core Text typeface already in the donor Skia archive.
 namespace {
+#ifdef _WIN32
 IDWriteFactory* DWriteFactory() {
   static IDWriteFactory* factory = [] {
     IDWriteFactory* created = nullptr;
@@ -1226,12 +1233,14 @@ IDWriteFactory* DWriteFactory() {
   }();
   return factory;
 }
+#endif
 // DWriteSettings from the default rendering params, clamped the way
 // ScaledFontDWrite::CreateSkTypeface clamps them.
 struct TextSettings { int mode = 0; float gamma = 2.2f, contrast = 1.0f, clearType = 1.0f; };
 const TextSettings& Settings() {
   static const TextSettings settings = [] {
     TextSettings s;
+#ifdef _WIN32
     IDWriteFactory* factory = DWriteFactory();
     IDWriteRenderingParams* params = nullptr;
     if (factory && SUCCEEDED(factory->CreateRenderingParams(&params)) && params) {
@@ -1239,17 +1248,21 @@ const TextSettings& Settings() {
       s.clearType = params->GetClearTypeLevel();
       params->Release();
     }
-    // gfxWindowsPlatform's gamma, and an enhanced contrast that stays 1.0
-    // unless the ClearType tuner set one (web_geometry/glyph_style.cpp).
     s.gamma = web_geometry::SystemTextGamma();
     s.contrast = web_geometry::SystemTextContrast();
     if (s.gamma < 0.0f || s.gamma > 4.0f) s.gamma = 2.2f;
+#else
+    s.gamma = web_geometry::SystemTextGamma();
+    s.contrast = web_geometry::SystemTextContrast();
+    if (s.gamma < 0.0f || s.gamma > 4.0f) s.gamma = 1.8f;
+#endif
     if (s.contrast < 0.0f || s.contrast > 1.0f) s.contrast = 1.0f;
     if (s.clearType < 0.0f || s.clearType > 1.0f) s.clearType = 1.0f;
     return s;
   }();
   return settings;
 }
+#ifdef _WIN32
 sk_sp<SkTypeface> TypefaceFor(IDWriteFontFace* face) {
   IDWriteFactory* factory = DWriteFactory();
   if (!factory || !face) return nullptr;
@@ -1267,6 +1280,12 @@ sk_sp<SkTypeface> TypefaceFor(IDWriteFontFace* face) {
   if (font) font->Release();
   return typeface;
 }
+#else
+sk_sp<SkTypeface> TypefaceFor(::IDWriteFontFace* face) {
+  if (!face || !face->CoreFont()) return nullptr;
+  return SkMakeTypefaceFromCTFont(static_cast<CTFontRef>(face->CoreFont()));
+}
+#endif
 }  // namespace
 
 namespace {
@@ -1429,3 +1448,12 @@ bool FillText(const Surface& surface, const double transform[6], const TextRun* 
   return DrawTextRuns(surface, transform, runs, runCount, size, nullptr, pattern, options, shadow, ink);
 }
 }  // namespace ruyijs::web_canvas::skia
+
+#ifndef _WIN32
+// SkCTFontCreateExactCopy calls this Firefox widget helper before it reapplies
+// font variations. The shell targets macOS 26, so that path is the one taken.
+// widget/cocoa/nsCocoaFeatures.mm is not part of this link.
+namespace nsCocoaFeatures {
+bool OnVenturaOrLater() { return true; }
+}
+#endif

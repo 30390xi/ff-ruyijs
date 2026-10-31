@@ -10,6 +10,7 @@
 #include "js/Realm.h"
 #include "runtime/native_constructor_trace.h"
 #include "runtime/page_helpers.h"
+#include <cmath>
 
 namespace ruyijs::web_canvas {
 const JSClass kOffscreenClass = {"OffscreenCanvas",

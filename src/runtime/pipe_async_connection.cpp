@@ -1,5 +1,6 @@
 #include "runtime/pipe_async.h"
 
+#ifdef _WIN32
 namespace ruyijs {
 PipeResult PipeError(DWORD error) {
   return error == ERROR_BROKEN_PIPE || error == ERROR_NO_DATA ||
@@ -9,7 +10,6 @@ PipeResult PipeError(DWORD error) {
 void CancelPipeOperation(HANDLE pipe, PipeOperation& operation) {
   if (!operation.pending) return;
   DWORD ignored = 0;
-  // Cancellation completion owns the lifetime of the buffers and OVERLAPPED.
   GetOverlappedResult(pipe, &operation.value, &ignored, TRUE);
   operation.pending = false;
 }
@@ -69,3 +69,65 @@ PipeResult PipeIo(HANDLE pipe, PipeOperation& op, bool writing,
   return *transferred ? PipeResult::Ready : PipeResult::Closed;
 }
 }
+#else
+#include <cerrno>
+#include <poll.h>
+namespace ruyijs {
+void CancelPipeOperation(void*, PipeOperation& operation) { operation.pending = false; }
+bool Pipe::ListenAsync(const char* name) {
+  if (async_ || !OpenServer(name, true)) return false;
+  async_ = NewPipeAsync();
+  if (!async_) { Close(); return false; }
+  async_->server = true;
+  return true;
+}
+bool Pipe::ConnectAsync(const char* name) {
+  if (async_ || !OpenClient(name, true)) return false;
+  async_ = NewPipeAsync();
+  if (!async_) { Close(); return false; }
+  async_->connected = true;
+  return true;
+}
+PipeResult PipeAccept(void*& pipe, PipeAsync& state) {
+  if (state.connected) return PipeResult::Ready;
+  const int fd = PipeFd(pipe);
+  pollfd ready{fd, POLLIN, 0};
+  const int waited = poll(&ready, 1, 0);
+  if (waited == 0) return PipeResult::Pending;
+  if (waited < 0) return PipeResult::Failed;
+  const int conn = accept(fd, nullptr, nullptr);
+  if (conn < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) return PipeResult::Pending;
+    return PipeResult::Failed;
+  }
+  close(fd);
+  const int flags = fcntl(conn, F_GETFL, 0);
+  if (flags < 0 || fcntl(conn, F_SETFL, flags | O_NONBLOCK) != 0) {
+    close(conn);
+    return PipeResult::Failed;
+  }
+  int one = 1;
+  setsockopt(conn, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+  pipe = PipeFromFd(conn);
+  state.connected = true;
+  return PipeResult::Ready;
+}
+PipeResult PipeIo(void* pipe, PipeOperation& op, bool writing,
+                    void* bytes, unsigned size, unsigned* transferred) {
+  *transferred = 0;
+  const int fd = PipeFd(pipe);
+  const ssize_t count = writing ? send(fd, bytes, size, 0) : recv(fd, bytes, size, 0);
+  op.pending = false;
+  if (count < 0) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+      op.pending = true;
+      return PipeResult::Pending;
+    }
+    return errno == EPIPE || errno == ECONNRESET ? PipeResult::Closed : PipeResult::Failed;
+  }
+  if (!count) return PipeResult::Closed;
+  *transferred = static_cast<unsigned>(count);
+  return PipeResult::Ready;
+}
+}
+#endif

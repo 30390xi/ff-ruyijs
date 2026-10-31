@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+// Windows: the DirectWrite COM face. Darwin: font_backend.h defines this
+// same global name as the Core Text shim. It is not a namespaced type.
 struct IDWriteFontFace;
 
 namespace ruyijs::web_canvas::skia {

@@ -1,5 +1,9 @@
 #include "web_geometry/font_backend.h"
+#ifdef _WIN32
 #include <dwrite_3.h>
+#else
+#include <CoreText/CoreText.h>
+#endif
 #include <algorithm>
 #include <cmath>
 
@@ -33,6 +37,28 @@ bool Continuation(uint32_t code) {
 namespace {
 // font.blacklist.underline_offset (modules/libpref/init/all.js).
 bool BadUnderlineFamily(IDWriteFontFace* face) {
+#ifndef _WIN32
+  if (!face || !face->CoreFont()) return false;
+  CTFontRef font = static_cast<CTFontRef>(face->CoreFont());
+  CFStringRef name = CTFontCopyFamilyName(font);
+  if (!name) return false;
+  static const CFStringRef kFamilies[] = {
+      CFSTR("FangSong"), CFSTR("Gulim"), CFSTR("GulimChe"), CFSTR("MingLiU"),
+      CFSTR("MingLiU-ExtB"), CFSTR("MingLiU_HKSCS"), CFSTR("MingLiU-HKSCS-ExtB"),
+      CFSTR("MS Gothic"), CFSTR("MS Mincho"), CFSTR("MS PGothic"), CFSTR("MS PMincho"),
+      CFSTR("MS UI Gothic"), CFSTR("PMingLiU"), CFSTR("PMingLiU-ExtB"), CFSTR("SimHei"),
+      CFSTR("SimSun"), CFSTR("SimSun-ExtB"), CFSTR("Hei"), CFSTR("Kai"),
+      CFSTR("Apple LiGothic"), CFSTR("Apple LiSung"), CFSTR("Osaka")};
+  bool bad = false;
+  for (CFStringRef item : kFamilies) {
+    if (CFStringCompare(name, item, kCFCompareCaseInsensitive) == kCFCompareEqualTo) {
+      bad = true;
+      break;
+    }
+  }
+  CFRelease(name);
+  return bad;
+#else
   if (!face) return false;
   static const wchar_t* kFamilies[] = {
       L"FangSong", L"Gulim", L"GulimChe", L"MingLiU", L"MingLiU-ExtB", L"MingLiU_HKSCS",
@@ -53,6 +79,7 @@ bool BadUnderlineFamily(IDWriteFontFace* face) {
       if (_wcsicmp(name.c_str(), bad) == 0) return true;
   }
   return false;
+#endif
 }
 }  // namespace
 

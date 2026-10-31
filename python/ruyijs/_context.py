@@ -5,6 +5,7 @@ import math
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -20,8 +21,19 @@ from ._console import ConsoleControl
 from ._inspector import InspectorControl
 from ._input import InputControl
 from ._context_eval import EvaluationControl
-from ._runtime_paths import get_runtime_path
+from ._runtime_paths import get_runtime_path, shell_filename
 from ._values import JSError, decode, encode
+
+
+
+def macos_core_library(runtime_root):
+    """Prefer the freshly built dylib, then the staged runtime copy."""
+    root = Path(runtime_root)
+    for name in ("necko_tls", "necko"):
+        candidate = root / "dist" / name / "libnecko_core.dylib"
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def _running_under_wine():
@@ -121,19 +133,37 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
         self._closed, self._pipe, self._process, self._stderr = True, None, None, None
         selected = shell or os.environ.get("RUYIJS_SHELL")
         self.shell = (Path(selected).resolve() if selected else
-                      get_runtime_path() / "dist" / "js.exe")
+                      get_runtime_path() / "dist" / shell_filename())
         if not self.shell.is_file():
             raise FileNotFoundError(f"ruyijs shell does not exist: {self.shell}")
+        if sys.platform == "darwin":
+            runtime_root = self.shell.parent.parent
+            if not child_environment.get("RUYIJS_NECKO_PYTHON"):
+                bundled = runtime_root / "vendor" / "necko-derived" / "python" / "bin" / "python3"
+                plain = runtime_root / "vendor" / "necko-derived" / "python" / "python3"
+                if not bundled.is_file() and not plain.is_file():
+                    child_environment["RUYIJS_NECKO_PYTHON"] = sys.executable
+            if not child_environment.get("NECKO_CORE_LIBRARY"):
+                core = macos_core_library(runtime_root)
+                if core is not None:
+                    child_environment["NECKO_CORE_LIBRARY"] = str(core)
         _prefer_bundled_crt(self.shell)
         try:
             self._pipe = Pipe()
             self._stderr = tempfile.TemporaryFile()
+            popen_kwargs = {
+                "stdin": subprocess.DEVNULL,
+                "stdout": subprocess.DEVNULL,
+                "stderr": self._stderr,
+                "close_fds": True,
+                "env": child_environment,
+            }
+            if os.name == "nt":
+                popen_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
             self._process = subprocess.Popen(
                 [str(self.shell), "--ruyijs-rpc", self._pipe.name,
                  "--ruyijs-mode", mode],
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=self._stderr,
-                creationflags=subprocess.CREATE_NO_WINDOW, close_fds=True,
-                env=child_environment,
+                **popen_kwargs,
             )
             self._pipe.connect(time.monotonic() + self.timeout)
             self._closed = False
@@ -141,7 +171,7 @@ class Context(EnvironmentControl, SchedulingControl, RandomControl, ResourceCont
                 self.configure_environment(environment)
         except BaseException as error:
             if isinstance(error, EOFError) or (
-                    isinstance(error, OSError) and error.winerror == 109):
+                    os.name == "nt" and isinstance(error, OSError) and error.winerror == 109):
                 if self._process is not None and self._process.poll() is None:
                     try:
                         self._process.wait(timeout=1)

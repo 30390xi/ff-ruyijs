@@ -4,6 +4,7 @@
 // Bounded table checks from gfxDWriteFont::HasBitmapStrikeForSize and IsCJKFont.
 #pragma once
 #include <cstdint>
+#include <cmath>
 #include "web_geometry/font_backend.h"
 namespace ruyijs::web_geometry {
 

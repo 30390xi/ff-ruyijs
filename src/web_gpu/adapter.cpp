@@ -5,6 +5,7 @@
 #include "js/CallAndConstruct.h"
 #include "js/PropertyAndElement.h"
 #include "js/Realm.h"
+#include <cmath>
 
 namespace ruyijs::web_gpu {
 namespace {

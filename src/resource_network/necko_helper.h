@@ -5,6 +5,7 @@
 #include <vector>
 
 namespace ruyijs::resource_network {
+#ifdef _WIN32
 class NeckoHelper {
  public:
   ~NeckoHelper() {
@@ -66,5 +67,22 @@ class NeckoHelper {
   std::mutex lock_;
   NeckoHandle process_, job_;
 };
+#else
+#include <sys/types.h>
+class NeckoHelper {
+ public:
+  NeckoHelper() = default;
+  ~NeckoHelper();
+  NeckoHelper(const NeckoHelper&) = delete;
+  NeckoHelper& operator=(const NeckoHelper&) = delete;
+  bool Start(const std::wstring& python, NeckoPipe& input, NeckoPipe& output, const wchar_t* mode);
+  void Cancel();
+  bool Finish(ULONGLONG deadline);
+ private:
+  void KillLocked();
+  std::mutex lock_;
+  pid_t pid_ = 0;
+};
+#endif
 bool NeckoPythonPath(std::wstring*);
 }

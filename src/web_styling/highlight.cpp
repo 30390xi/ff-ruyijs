@@ -10,6 +10,7 @@
 #include "web_styling/internal.h"
 #include <iterator>
 #include <string>
+#include <cmath>
 
 namespace ruyijs::web_styling {
 namespace {

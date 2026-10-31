@@ -6,6 +6,7 @@
 #include "js/ErrorReport.h"
 #include "js/ForOfIterator.h"
 #include "js/Symbol.h"
+#include <cmath>
 
 namespace ruyijs::web_canvas {
 namespace {

@@ -1,3 +1,68 @@
+#ifndef _WIN32
+#include "resource_network/necko_pipe.h"
+
+#include <cerrno>
+#include <fcntl.h>
+#include <poll.h>
+#include <unistd.h>
+
+namespace ruyijs::resource_network {
+DWORD NeckoRemaining(ULONGLONG deadline) {
+  const ULONGLONG now = GetTickCount64();
+  if (now >= deadline) return 0;
+  const ULONGLONG left = deadline - now;
+  return left > 0x7fffffff ? 0x7fffffff : DWORD(left);
+}
+bool NeckoPipe::Open(bool parentWrites) {
+  int ends[2] = {-1, -1};
+  if (pipe(ends) != 0) return false;
+  const int parentFd = parentWrites ? ends[1] : ends[0];
+  const int childFd = parentWrites ? ends[0] : ends[1];
+  if (fcntl(parentFd, F_SETFD, FD_CLOEXEC) != 0 ||
+      fcntl(parentFd, F_SETFL, O_NONBLOCK) != 0) {
+    close(ends[0]);
+    close(ends[1]);
+    return false;
+  }
+  parent_.Reset(parentFd);
+  child_.Reset(childFd);
+  return true;
+}
+bool NeckoPipe::Transfer(void* data, uint32_t size, bool writing, ULONGLONG deadline) {
+  auto* bytes = static_cast<char*>(data);
+  uint32_t done = 0;
+  while (done < size) {
+    const DWORD remain = NeckoRemaining(deadline);
+    if (!remain) return false;
+    pollfd ready{};
+    ready.fd = parent_.Get();
+    ready.events = writing ? POLLOUT : POLLIN;
+    const int waited = poll(&ready, 1, int(remain));
+    if (waited < 0) {
+      if (errno == EINTR) continue;
+      return false;
+    }
+    if (!waited) return false;
+    const uint32_t amount = size - done > 65536 ? 65536 : size - done;
+    ssize_t moved = 0;
+    do {
+      moved = writing ? ::write(parent_.Get(), bytes + done, amount)
+                      : ::read(parent_.Get(), bytes + done, amount);
+    } while (moved < 0 && errno == EINTR);
+    if (moved < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+    if (moved <= 0 || uint32_t(moved) > amount) return false;
+    done += uint32_t(moved);
+  }
+  return true;
+}
+bool NeckoPipe::Write(const void* data, uint32_t size, ULONGLONG deadline) {
+  return Transfer(const_cast<void*>(data), size, true, deadline);
+}
+bool NeckoPipe::Read(void* data, uint32_t size, ULONGLONG deadline) {
+  return Transfer(data, size, false, deadline);
+}
+}
+#else
 #include "resource_network/necko_pipe.h"
 #include <string>
 
@@ -68,3 +133,5 @@ bool NeckoPipe::Read(void* data, uint32_t size, ULONGLONG deadline) {
   return Transfer(data, size, false, deadline);
 }
 }
+
+#endif

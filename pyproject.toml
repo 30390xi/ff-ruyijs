@@ -20,7 +20,11 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = []
+dependencies = [
+    "requests; sys_platform == 'darwin'",
+    "brotli; sys_platform == 'darwin'",
+    "zstandard; sys_platform == 'darwin'",
+]
 
 [tool.setuptools]
 packages = ["ruyijs"]

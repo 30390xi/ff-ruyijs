@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iterator>
 #include <cstdlib>
+#ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -11,11 +12,19 @@
 #endif
 #include <windows.h>
 #include <shellapi.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace ruyijs {
 namespace {
+#ifdef _WIN32
+unsigned long CurrentPid() { return GetCurrentProcessId(); }
+#else
+pid_t CurrentPid() { return getpid(); }
+#endif
 bool ExpandTracePid(std::string& path) {
-  const std::string pid = std::to_string(GetCurrentProcessId());
+  const std::string pid = std::to_string(CurrentPid());
   bool changed = false;
   size_t offset = 0;
   while ((offset = path.find("{pid}", offset)) != std::string::npos) {
@@ -44,17 +53,22 @@ void PrepareTracePath(std::vector<std::string>& arguments) {
   std::string path(configured);
   if (ExpandTracePid(path)) arguments.push_back("--trace-file=" + path);
 }
+bool ProductMode(int count, char** values) {
+  for (int index = 1; index < count; ++index) {
+    if (!values[index]) continue;
+    if (!strcmp(values[index], "--ruyijs-runtime") ||
+        !strcmp(values[index], "--ruyijs-rpc") ||
+        !strncmp(values[index], "--ruyijs-rpc=", 13) ||
+        !strcmp(values[index], "--ruyijs-worker") ||
+        !strncmp(values[index], "--ruyijs-worker=", 16)) return true;
+  }
+  return false;
+}
 }  // namespace
 bool Arguments::Prepare(int* count, char*** values) {
-  bool product = false;
-  for (int index = 1; index < *count; ++index) {
-    if (!strcmp((*values)[index], "--ruyijs-runtime") ||
-        !strcmp((*values)[index], "--ruyijs-rpc") ||
-        !strncmp((*values)[index], "--ruyijs-rpc=", 13) ||
-        !strcmp((*values)[index], "--ruyijs-worker") ||
-        !strncmp((*values)[index], "--ruyijs-worker=", 16)) product = true;
-  }
-  if (!product) return true;
+  if (!count || !values || !*values) return false;
+  if (!ProductMode(*count, *values)) return true;
+#ifdef _WIN32
   int wideCount;
   wchar_t** wide = CommandLineToArgvW(GetCommandLineW(), &wideCount);
   if (!wide) return false;
@@ -70,6 +84,15 @@ bool Arguments::Prepare(int* count, char*** values) {
     strings_.push_back(std::move(text));
   }
   LocalFree(wide);
+#else
+  // macOS already passes UTF-8 argv. Copy it so {pid} expansion owns the
+  // storage the shell's option parser borrows.
+  strings_.reserve(static_cast<size_t>(*count));
+  for (int index = 0; index < *count; ++index) {
+    if (!(*values)[index]) return false;
+    strings_.emplace_back((*values)[index]);
+  }
+#endif
   PrepareTracePath(strings_);
   for (auto& text : strings_) pointers_.push_back(text.data());
   pointers_.push_back(nullptr);
@@ -79,11 +102,15 @@ bool Arguments::Prepare(int* count, char*** values) {
 }
 
 bool ReadUTF8File(const char* path, std::string* output) {
+#ifdef _WIN32
   int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, nullptr, 0);
   if (!count) return false;
   std::wstring wide(count, L'\0');
   MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide.data(), count);
   std::ifstream file(wide.c_str(), std::ios::binary);
+#else
+  std::ifstream file(path, std::ios::binary);
+#endif
   if (!file) return false;
   output->assign(std::istreambuf_iterator<char>(file), {});
   return !file.bad();

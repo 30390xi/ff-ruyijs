@@ -25,25 +25,45 @@ class PlatformDistribution(Distribution):
 class BuildPython(build_py):
     def get_outputs(self, include_bytecode=True):
         outputs = list(super().get_outputs(include_bytecode=include_bytecode))
-        examples = Path(self.build_lib) / "ruyijs/examples"
-        if examples.exists():
-            outputs.extend(str(path) for path in examples.rglob("*") if path.is_file())
+        for relative in ("ruyijs/examples", "ruyijs_necko", "necko"):
+            folder = Path(self.build_lib) / relative
+            if folder.exists():
+                outputs.extend(str(path) for path in folder.rglob("*") if path.is_file())
         return sorted(set(outputs))
 
     def run(self):
-        if sys.platform != "win32" or platform.machine().lower() not in ("amd64", "x86_64"):
-            raise RuntimeError("ruyijs requires Windows x64 and a 64-bit Python installation")
-        if sys.maxsize <= 2 ** 32:
-            raise RuntimeError("ruyijs requires 64-bit Python")
+        tag = _platform_tag()
         super().run()
-        runtime = obtain_runtime(Path(__file__).resolve().parent)
+        project = Path(__file__).resolve().parent
         target = Path(self.build_lib) / "ruyijs/_runtime"
-        if target.exists():
-            validate(target)
-            if digest(target / "SHA256SUMS") != digest(runtime / "SHA256SUMS"):
-                raise ValueError(f"Build directory contains another runtime version: {target}")
+        if tag == "win_amd64":
+            runtime = obtain_runtime(project)
+            if target.exists():
+                validate(target)
+                if digest(target / "SHA256SUMS") != digest(runtime / "SHA256SUMS"):
+                    raise ValueError(f"Build directory contains another runtime version: {target}")
+            else:
+                shutil.copytree(runtime, target)
         else:
-            shutil.copytree(runtime, target)
+            runtime = project / "dist"
+            if not (runtime / "js").is_file() or not (runtime / "libmozglue.dylib").is_file():
+                raise FileNotFoundError(
+                    "macOS arm64 wheel needs dist/js and dist/libmozglue.dylib "
+                    "from an aarch64-apple-darwin Firefox donor")
+            for name in ("js", "libmozglue.dylib", "libruyijs_client.dylib"):
+                if not (runtime / name).is_file():
+                    raise FileNotFoundError(f"macOS arm64 wheel needs dist/{name}")
+            if target.exists():
+                shutil.rmtree(target)
+            target.mkdir(parents=True)
+            shell_dest = target / "dist"
+            shell_dest.mkdir(parents=True)
+            for name in ("js", "libmozglue.dylib", "libruyijs_client.dylib"):
+                shutil.copy2(runtime / name, shell_dest / name)
+            from macos_runtime import donor_bin, stage_necko
+            stage_necko(target / "dist" / "necko", donor_bin(project),
+                        project / "src/resource_network/necko_fetch.js")
+            _install_darwin_helper(Path(self.build_lib), project)
         examples = Path(self.build_lib) / "ruyijs/examples"
         if examples.exists():
             shutil.rmtree(examples)
@@ -59,14 +79,44 @@ class BuildPython(build_py):
                 + readme.read_text(encoding="utf-8"), encoding="utf-8")
 
 
+
+def _install_darwin_helper(build_lib, project):
+    source = project / "src/resource_network"
+    mapping = {
+        build_lib / "ruyijs_necko/__init__.py": source / "necko_ruyi_init.py",
+        build_lib / "ruyijs_necko/timing.py": source / "necko_timing.py",
+        build_lib / "ruyijs_necko/oneshot.py": source / "necko_oneshot.py",
+        build_lib / "necko/client.py": source / "necko_client.py",
+        build_lib / "necko/adapters.py": source / "necko_adapters.py",
+        build_lib / "necko/__init__.py": source / "necko_pkg_init.py",
+        build_lib / "necko/necko_fetch.js": source / "necko_fetch.js",
+    }
+    for dest, src in mapping.items():
+        if not src.is_file():
+            raise FileNotFoundError(src)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(src.read_bytes())
+
+
+def _platform_tag():
+    machine = platform.machine().lower()
+    if sys.maxsize <= 2 ** 32:
+        raise RuntimeError("ruyijs requires 64-bit Python")
+    if sys.platform == "win32" and machine in ("amd64", "x86_64"):
+        return "win_amd64"
+    if sys.platform == "darwin" and machine in ("arm64", "aarch64"):
+        return "macosx_26_0_arm64"
+    raise RuntimeError("ruyijs wheels are built for Windows x64 or macOS arm64")
+
+
 class PlatformWheel(bdist_wheel):
     def finalize_options(self):
         super().finalize_options()
         self.root_is_pure = False
-        self.plat_name = "win_amd64"
+        self.plat_name = _platform_tag()
 
     def get_tag(self):
-        return "py3", "none", "win_amd64"
+        return "py3", "none", _platform_tag()
 
 
 setup(distclass=PlatformDistribution,

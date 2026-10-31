@@ -2,6 +2,7 @@
 #include "web_geometry/svg_path.h"
 #include "domain/styling/css_numeric_value.h"
 #include <cstdlib>
+#include <cmath>
 
 namespace ruyijs::web_geometry {
 bool SvgShape(const SvgInput& input, const SvgOptions& options, svg::SvgBox* box, bool* present) {

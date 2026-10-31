@@ -1,3 +1,78 @@
+#ifndef _WIN32
+// gasp and maxp through Core Text tables. The mask itself is Core Text, so
+// this does not invent a DirectWrite rendering mode. Gamma stays 1.8 and
+// contrast stays 1.0: those are the values the existing Core Text coverage
+// table already applies, and macOS has no ClearType gamma to read.
+#include "web_geometry/glyph_mask.h"
+
+#include <cmath>
+
+#include "web_geometry/font_backend.h"
+
+namespace ruyijs::web_geometry {
+namespace {
+constexpr uint32_t OtTag(char a, char b, char c, char d) {
+  return (uint32_t(uint8_t(d)) << 24) | (uint32_t(uint8_t(c)) << 16) | (uint32_t(uint8_t(b)) << 8) |
+         uint32_t(uint8_t(a));
+}
+uint16_t Be16(const uint8_t* p) { return uint16_t((p[0] << 8) | p[1]); }
+bool Table(IDWriteFontFace* face, uint32_t tag, const uint8_t** data, uint32_t* bytes, void** context) {
+  const void* raw = nullptr;
+  BOOL exists = FALSE;
+  *data = nullptr;
+  *bytes = 0;
+  *context = nullptr;
+  if (!face || FAILED(face->TryGetFontTable(tag, &raw, bytes, context, &exists)) || !exists) return false;
+  *data = static_cast<const uint8_t*>(raw);
+  return true;
+}
+bool GaspSmoothing(IDWriteFontFace* face, int ppem) {
+  const uint8_t* table = nullptr;
+  uint32_t bytes = 0;
+  void* context = nullptr;
+  if (!Table(face, OtTag('g', 'a', 's', 'p'), &table, &bytes, &context)) return true;
+  bool smooth = true;
+  if (bytes >= 4) {
+    const uint16_t version = Be16(table), ranges = Be16(table + 2);
+    const bool version1 = version == 1;
+    for (uint16_t i = 0; i < ranges; ++i) {
+      const uint64_t at = 4u + uint64_t(i) * 4u;
+      if (at + 4 > bytes) break;
+      if (ppem <= int(Be16(table + at))) {
+        const uint16_t flags = Be16(table + at + 2);
+        smooth = !version1 || (flags & 8) || (flags & 2);
+        break;
+      }
+    }
+  }
+  face->ReleaseFontTable(context);
+  return smooth;
+}
+bool IsHinted(IDWriteFontFace* face) {
+  const uint8_t* table = nullptr;
+  uint32_t bytes = 0;
+  void* context = nullptr;
+  if (!Table(face, OtTag('m', 'a', 'x', 'p'), &table, &bytes, &context)) return false;
+  const bool hinted = bytes >= 28 && table[0] == 0 && table[1] == 1 && table[2] == 0 && table[3] == 0 &&
+                      Be16(table + 26) != 0;
+  face->ReleaseFontTable(context);
+  return hinted;
+}
+}  // namespace
+
+float SystemTextGamma() { return 1.8f; }
+float SystemTextContrast() { return 1.0f; }
+
+GlyphRenderStyle GlyphStyle(IDWriteFontFace* face, float size) {
+  GlyphRenderStyle style;
+  style.em = size;
+  const float gdi = std::round(size * 64.0f) / 64.0f;
+  if (!(size > 20) && face && !GaspSmoothing(face, int(std::round(gdi))) && IsHinted(face)) style.em = gdi;
+  style.render = face && GaspSmoothing(face, int(std::round(gdi))) ? 5 : 1;
+  return style;
+}
+}  // namespace ruyijs::web_geometry
+#else
 // SkScalerContext_DW's choice of rendering mode, reduced to the case the canvas
 // asks for: a grayscale A8 mask, normal hinting, no embedded bitmaps. The
 // donor's bitmap branches therefore collapse, leaving the size test, the
@@ -123,3 +198,5 @@ GlyphRenderStyle GlyphStyle(IDWriteFontFace* face, float size) {
   return style;
 }
 }  // namespace ruyijs::web_geometry
+
+#endif

@@ -96,6 +96,12 @@ bool FillCanvasText(State& state, JS::HandleObject context, const std::u16string
 
   input.x = origin_x;
   input.y = y;
+#ifndef _WIN32
+  {
+    web_geometry::CanvasTextPath outline;
+    if (!detail::Fonts(state).BuildCanvasTextPath(text, input, &outline)) return false;
+  }
+#endif
   double matrix[6];
   if (!detail::GetMatrix(state.cx, context, matrix)) return false;
   raster::Surface surface;

@@ -7,6 +7,8 @@
   与本仓库 `src/` 下的 ruyijs 浏览器环境代码一起链接成 `js.exe`。
 - **网络请求库**：使用 Firefox 官方的 Necko 网络栈（Firefox 159 的 HTTP/1.1、HTTP/3、
   brotli 原生组件）。它随运行时包发布，位于 `vendor/necko-derived`。
+  Windows 运行时包里的 Necko 按上面这条发布。macOS 的请求走 donor 编出的 `xpcshell`，
+  已验证的是 HTTP/1.1 和 HTTP/2，步骤见 [docs/macos.zh-CN.md](../docs/macos.zh-CN.md)。
 - **第三方原生库**：`vendor/compression-native`（zlib-rs、brotli）、`vendor/image-native`
   （dav1d、libavif、libyuv、qcms）和 `vendor/urlpattern-native` 都取自 Firefox 官方源码树，
   各目录保留原许可证，`manifest.json` 记录每个文件的 SHA-256。
@@ -126,11 +128,28 @@
 
 其他参数：`--prepare-only` 只准备输入；`--no-incremental` 全量重编；`--jobs N` 编译进程数。
 
+## macOS arm64
+
+macOS 不使用上面的 Windows 预编译运行时。外壳从源码构建，Firefox donor 放在仓库外面。
+步骤、已验证的 HTTP/1.1 与 HTTP/2，以及仍然留空的表面写在
+[docs/macos.zh-CN.md](../docs/macos.zh-CN.md)。
+
+在仓库根目录、且已设置 `MACOSX_DEPLOYMENT_TARGET=26.0` 时：
+
+```sh
+python3.12 -B tools/bootstrap_macos_helper.py
+python3.12 -B tools/build.py --donor-obj ../firefox-159/obj-js-standalone
+```
+
+`bootstrap_macos_helper.py` 只在 macOS 上创建 `vendor/necko-derived/python`。
+已经有 `pyvenv.cfg` 时它原样退出，不重装。不要把 `RUYIJS_DONOR_OBJ` 写进长期使用的 shell 配置。
+
 ## 文件
 
 | 文件 | 职责 |
 | --- | --- |
 | `build.py` | 构建编排、输入身份和产物版本检查 |
+| `bootstrap_macos_helper.py` | 在 macOS 上创建 Necko helper 虚拟环境；已存在则保持不动 |
 | `donor.py` | 读取 donor 配置、对象列表和库路径 |
 | `generate.py` | 生成保留原许可头的 shell 单元和内嵌资源 |
 | `native.py` | 调用编译器/链接器，部署运行库 |

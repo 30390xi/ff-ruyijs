@@ -1,3 +1,109 @@
+#ifndef _WIN32
+// One grayscale glyph through Core Text. The coverage buffer keeps Core
+// Graphics' row order: row 0 is the top of the bitmap. left/top are the
+// bitmap origin in the Y-down canvas space the mask blitter already uses.
+#include "web_geometry/font_backend.h"
+#include "web_geometry/glyph_mask.h"
+
+#include <CoreText/CoreText.h>
+
+#include <cmath>
+#include <vector>
+
+namespace ruyijs::web_geometry {
+namespace {
+float InternalGamma(float gamma) { return float(int(gamma * 64.0f)) / 64.0f; }
+float InternalContrast(float contrast) { return float(int(contrast * 255.0f + 0.5f)) / 255.0f; }
+
+struct Point { float x, y; };
+Point MapGlyph(const float linear[4], float dx, float dy, float x, float y_up) {
+  return {linear[0] * x - linear[2] * y_up + dx, -linear[1] * x + linear[3] * y_up - dy};
+}
+}
+
+bool GlyphMask(const SelectedFont& font, float deviceSize, const float linear[4], float dx,
+               float dy, uint16_t glyph, const uint8_t rgb[3], CanvasGlyphMask* out) {
+  out->coverage.clear();
+  out->layers.clear();
+  out->width = out->height = 0;
+  if (!font.face || !font.face->CoreFont() || !linear || !(deviceSize > 0) || deviceSize > 4096)
+    return false;
+  CTFontRef sized = CTFontCreateCopyWithAttributes(static_cast<CTFontRef>(font.face->CoreFont()),
+                                                   deviceSize, nullptr, nullptr);
+  if (!sized) return false;
+  const CGGlyph cg = glyph;
+  CGRect box = CTFontGetBoundingRectsForGlyphs(sized, kCTFontOrientationHorizontal, &cg, nullptr, 1);
+  if (!std::isfinite(box.origin.x) || !std::isfinite(box.origin.y) ||
+      !std::isfinite(box.size.width) || !std::isfinite(box.size.height) || box.size.width <= 0 ||
+      box.size.height <= 0) {
+    CFRelease(sized);
+    return true;
+  }
+  const Point corners[4] = {
+      MapGlyph(linear, dx, dy, box.origin.x, box.origin.y),
+      MapGlyph(linear, dx, dy, box.origin.x + box.size.width, box.origin.y),
+      MapGlyph(linear, dx, dy, box.origin.x, box.origin.y + box.size.height),
+      MapGlyph(linear, dx, dy, box.origin.x + box.size.width, box.origin.y + box.size.height),
+  };
+  float min_x = corners[0].x, max_x = corners[0].x, min_y = corners[0].y, max_y = corners[0].y;
+  for (const Point& corner : corners) {
+    min_x = std::min(min_x, corner.x);
+    max_x = std::max(max_x, corner.x);
+    min_y = std::min(min_y, corner.y);
+    max_y = std::max(max_y, corner.y);
+  }
+  constexpr int kPad = 2;
+  const int left = int(std::floor(min_x)) - kPad;
+  const int bottom = int(std::floor(min_y)) - kPad;
+  const int right = int(std::ceil(max_x)) + kPad;
+  const int top = int(std::ceil(max_y)) + kPad;
+  const int width = right - left;
+  const int height = top - bottom;
+  if (width <= 0 || height <= 0 || width > 4096 || height > 4096) {
+    CFRelease(sized);
+    return false;
+  }
+  std::vector<uint8_t> pixels(size_t(width) * size_t(height), 0);
+  CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
+  CGContextRef context = CGBitmapContextCreate(pixels.data(), width, height, 8, width, gray,
+                                               kCGImageAlphaNone);
+  CFRelease(gray);
+  if (!context) {
+    CFRelease(sized);
+    return false;
+  }
+  CGContextSetShouldAntialias(context, true);
+  CGContextSetGrayFillColor(context, 1, 1);
+  CGContextTranslateCTM(context, -left, -bottom);
+  // Font y grows up. MapGlyph already folded the canvas matrix into that space.
+  CGContextConcatCTM(context, CGAffineTransformMake(linear[0], -linear[1], -linear[2], linear[3],
+                                                    dx, -dy));
+  const CGPoint origin = CGPointZero;
+  CTFontDrawGlyphs(sized, &cg, &origin, 1, context);
+  CFRelease(context);
+  CFRelease(sized);
+  uint8_t table[256];
+  GlyphMaskTable(InternalGamma(SystemTextGamma()), InternalContrast(SystemTextContrast()), rgb,
+                 table);
+  out->coverage.resize(pixels.size());
+  bool ink = false;
+  for (size_t i = 0; i < pixels.size(); ++i) {
+    const uint8_t value = table[pixels[i]];
+    out->coverage[i] = value;
+    ink = ink || value != 0;
+  }
+  if (!ink) {
+    out->coverage.clear();
+    return true;
+  }
+  out->left = left;
+  out->top = -top;
+  out->width = width;
+  out->height = height;
+  return true;
+}
+}  // namespace ruyijs::web_geometry
+#else
 // One glyph mask through IDWriteGlyphRunAnalysis, exactly as SkScalerContext_DW
 // asks for it: the same em size, measuring mode, grid fitting and grayscale
 // antialiasing, the subpixel offset folded into the glyph run transform, and
@@ -77,3 +183,5 @@ bool GlyphMask(const SelectedFont& font, float deviceSize, const float linear[4]
   return true;
 }
 }  // namespace ruyijs::web_geometry
+
+#endif
