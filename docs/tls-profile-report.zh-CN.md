@@ -133,7 +133,7 @@ oneshot 对没有代理的 `https` 使用这个库，代理和其他协议仍创
 
 库查找：环境变量优先；否则先 `dist/necko_tls/libnecko_core.dylib`，再 `dist/necko/libnecko_core.dylib`。暂存目录里的 NSS 同级库本来就在 `dist/necko`。没有重打压缩包，`macos.url` 仍为空。
 
-ALPN 为 `http/1.1` 时，同一条套接字写 HTTP/1.1。解析器的单元测试覆盖了 Content-Length、分块正文和跳过的 1xx。没有对活的 HTTP/1.1 源打开过。页面烟雾测试仍是 `h2`。
+ALPN 为 `http/1.1` 时，同一条套接字写 HTTP/1.1。解析器的单元测试覆盖了 Content-Length、分块正文和跳过的 1xx。这次测量没有对活的 HTTP/1.1 源打开过。后来的直连 TLS 检查打开了 `https://www.gnu.org/`，状态 200，版本码 11。页面烟雾测试仍是 `h2`。
 
 同一个进程里，一个适配器对 `https://example.com/` 发两次 GET：一个 ClientHello，两次状态 200。页面外壳仍是每个请求一次 oneshot，`--session` 才复用适配器。会话票据保持打开，长度不作为验收条件。不保存 cookie，`redirectionLimit` 仍是 0。
 
@@ -156,4 +156,4 @@ ALPN 为 `http/1.1` 时，同一条套接字写 HTTP/1.1。解析器的单元测
 - 没有重测代理。
 - 没有提交，没有推送，没有合并上游 PR。
 - 没有声称 Mac 页面已经逐个验证全部 60 个版本。
-- 没有声称活的 HTTP/1.1 源已经打开过。
+- 这次报告没有打开活的 HTTP/1.1 源。后来的直连 TLS 检查打开了 `https://www.gnu.org/`，状态 200，版本码 11。

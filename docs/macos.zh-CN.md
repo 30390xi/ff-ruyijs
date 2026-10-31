@@ -111,7 +111,7 @@ Windows 上同一次构建只复制 `oneshot.py`。Darwin 的 venv 不存在时�
 
 长度前缀帧和 Windows 相同。macOS 上的管道是 Unix socket。外壳启动 `python -I -B -m ruyijs_necko.oneshot`。直连 HTTPS 使用 `libnecko_core.dylib`。ALPN `h2` 使用产品的 HTTP/2 设置。ALPN 为 `http/1.1` 时在这条套接字上写 HTTP/1.1。其他 ALPN 表示不了，路由可以回退。代理在该请求上保留 xpcshell。直连 `http://` 走 `libnecko_core` 里的套接字和 HTTP/1 交换。直连 `https://` 走 `libnecko_core`，直到同一进程记住了响应里的 `Alt-Svc`，下一次到该来源的请求才走 `libnecko_quic`。证书校验失败不回退。不保存 cookie。`redirectionLimit` 仍是 0，xpcshell 路径上也是，所以 3xx 就作为这次的响应返回。同一个 helper 进程里，同源 HTTP/2 可以复用一条连接。页面外壳仍是每个请求启动一次 oneshot，除非使用 `--session`。
 
-直连 HTTPS 的页面验收过 HTTP/2，版本码 20，覆盖 100 和 159。这条套接字上的 HTTP/1.1 做过单元测试，没有对活的源打开过。更早的 xpcshell 路径也曾返回 HTTP/1.1。直连明文和 HTTP/3 使用与 Windows DLL 相同的导出。本机 HTTP/1.1 返回状态 200、版本码 11。本机 Neqo 服务器在记住响应 `Alt-Svc` 之后，第二次请求返回版本码 30。第二次请求的证书不受信任时失败，状态不是 200。公网 `quic.nginx.org` 同样从版本码 20 到 30，两次正文一致。`cloudflare.com` 没有下发 `Alt-Svc`，两次都停在版本码 20。请求如果落到 donor xpcshell，明文仍会返回 `necko 804b0033`。打开 socket process 后，这份 xpcshell 会关掉管道，并且不写错误。不要再写一套 QUIC。
+直连 HTTPS 的页面验收过 HTTP/2，版本码 20，覆盖 100 和 159。这条套接字上的 HTTP/1.1 做过单元测试。后来的直连 TLS 检查打开了 `https://www.gnu.org/`，状态 200，版本码 11。更早的 xpcshell 路径也曾返回 HTTP/1.1。直连明文和 HTTP/3 使用与 Windows DLL 相同的导出。本机 HTTP/1.1 返回状态 200、版本码 11。本机 Neqo 服务器在记住响应 `Alt-Svc` 之后，第二次请求返回版本码 30。第二次请求的证书不受信任时失败，状态不是 200。公网 `quic.nginx.org` 同样从版本码 20 到 30，两次正文一致。`cloudflare.com` 没有下发 `Alt-Svc`，两次都停在版本码 20。请求如果落到 donor xpcshell，明文仍会返回 `necko 804b0033`。打开 socket process 后，这份 xpcshell 会关掉管道，并且不写错误。不要再写一套 QUIC。
 
 ## 系统框架
 
@@ -158,7 +158,7 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 | 表面 | Windows | macOS |
 | --- | --- | --- |
 | JS 上下文、DOM、指纹、时钟、Python 桥 | 已实现 | 同一套 API |
-| Necko HTTP/1.1 与 HTTP/2 | 已实现 | 这一轮直连 HTTPS 页面在 100 和 159 都返回状态 200、版本码 20（`h2`）。ALPN 为 `http/1.1` 时写 HTTP/1.1。解析器做过单元测试。没有对活的 HTTP/1.1 源打开过。直连明文走收回的 HTTP/1 交换，本机服务返回状态 200、版本码 11。xpcshell 自己仍会返回 `necko 804b0033` |
+| Necko HTTP/1.1 与 HTTP/2 | 已实现 | 这一轮直连 HTTPS 页面在 100 和 159 都返回状态 200、版本码 20（`h2`）。ALPN 为 `http/1.1` 时写 HTTP/1.1。解析器做过单元测试。后来的直连 TLS 检查打开了 `https://www.gnu.org/`，状态 200，版本码 11。直连明文走收回的 HTTP/1 交换，本机服务返回状态 200、版本码 11。xpcshell 自己仍会返回 `necko 804b0033` |
 | HTTP/3 | `necko_quic.dll` 与 Neqo 0.32.0 | `libnecko_quic.dylib` 使用 Firefox 159 的 Neqo 0.32.0 和 donor NSS 3.131。同一进程的证明：第一次响应版本码 11，记住响应 `Alt-Svc` 后第二次是版本码 30。错误证书失败。公网 `quic.nginx.org` 从版本码 20 到 30，正文一致。socket process 保持关闭。页面外壳默认每个请求启动一次 oneshot，除非使用 `--session`，所以缓存不会跨过这些进程 |
 | TLS 配置 100–159 | `Context(tls=)` | 直连 HTTPS 走 `libnecko_core.dylib`。页面 100 和 159 跟着配置个数：100 是 17 个套件、6 个组、2 个 key share，159 是 15、5、3。八个边界的库内 GET 与表一致，并返回 200 和 `h2`。没写的请求头和 HTTP/2 设置跟随 0.2.1 的表。没有把全部 60 个版本当页面打开（`docs/tls-profile.zh-CN.md`） |
 | WebCrypto：SHA、AES-CBC、AES-GCM、HMAC、ECDSA、ECDH | CNG | CommonCrypto 与 Security.framework |
@@ -171,7 +171,7 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 | 字体别名 | 平台字体列表 | PostScript 名和字体族都匹配时，`Osaka-Mono` 映射到 `Osaka`。这一条来自 Firefox 的单字体列表 |
 | COLR 与 CPAL | 版本 0，调色板 0 | 版本 0，调色板 0。表字节来自 `CTFontCopyTable` |
 | 字形 gamma | DirectWrite 渲染模式 | `SystemTextGamma` 为 1.8，`SystemTextContrast` 为 1.0。可以读 `gasp` 和 `maxp` |
-| WebTransport | 共用的 C++ 帧。helper 模块已经在树里。0.2.1 安装仍走 `necko._http3.Connection` 和 `necko_quic.dll` | 同一套帧走 `libnecko_quic.dylib`。`webtransport=true` 只在这条长连接上。普通 HTTP/3 仍是 `webtransport=False`。哈希规则仍是 ECDSA P-256，有效期最多 14 天。本机 `127.0.0.1:9443` 协商成功，状态 200，回声 `ping`。不带哈希时 PKI 校验失败。这不是 60 个版本的 QUIC ClientHello 切换 |
+| WebTransport | 共用的 C++ 帧。helper 模块已经在树里。0.2.1 安装仍走 `necko._http3.Connection` 和 `necko_quic.dll` | 同一套帧走 `libnecko_quic.dylib`。`webtransport=true` 只在这条长连接上。普通 HTTP/3 仍是 `webtransport=False`。哈希规则仍是 ECDSA P-256，有效期最多 14 天。页面外壳拉起 `oneshot --webtransport` 打本机 `127.0.0.1:9443`：协商成功，状态 200，数据报 `ping` 被回声。不带哈希时 PKI 校验失败。这不是 60 个版本的 QUIC ClientHello 切换 |
 | iframe 文档加载 | 同一份源码。Necko 时刻经 QueryPerformanceCounter 换算 | 同一份源码。时刻经 `steady_clock` 的毫秒换算，与 `page_navigation.cpp` 相同。一个 iframe 文档返回状态 200 和 `h2` |
 | WebCodecs、音频解码、WebGPU、自定义内置元素、XML、表单目标 | 同一份源码 | 只有接口，或者明确返回未实现 |
 | DataDome 首页 | 服务端评分 | 服务端评分。示例的通过条件不变 |
@@ -184,7 +184,7 @@ DataDome 示例的首页结果是服务端评分，不是缺少的 Mac 绑定。
 
 外壳按 `macosx_26_0_arm64` 链接。Linux、Intel Mac，以及低于 macOS 26 的系统不在这份计划里。新行为只接到已经在用的 Firefox donor 或系统框架：ImageIO、Core Text、Core Graphics、CommonCrypto、Security。
 
-1. 本机明文和 HTTP/3 已经走 Windows 的导出名字。同一进程的证明连续通过两遍，公网 `quic.nginx.org` 的第二次请求也是版本码 30。socket process 保持关闭；打开后这只 xpcshell 仍以信号 11 退出，日志是空的。WebTransport 现在用同一份库维持一条长连接：本机回声 `127.0.0.1:9443` 协商成功，状态 200，数据报 `ping` 被原样回声。不带证书哈希时，PKI 校验这张证书失败。不用 `--session` 的页面请求不会保留 `Alt-Svc` 缓存。这个进程边界来自两边共用的 oneshot。
+1. 本机明文和 HTTP/3 已经走 Windows 的导出名字。同一进程的证明连续通过两遍，公网 `quic.nginx.org` 的第二次请求也是版本码 30。socket process 保持关闭；打开后这只 xpcshell 仍以信号 11 退出，日志是空的。WebTransport 现在用同一份库维持一条长连接。页面外壳拉起 `oneshot --webtransport` 打本机回声 `127.0.0.1:9443`：协商成功，状态 200，数据报 `ping` 被原样回声。不带证书哈希时，PKI 校验这张证书失败。不用 `--session` 的页面请求不会保留 `Alt-Svc` 缓存。这个进程边界来自两边共用的 oneshot。
 2. TLS 配置。直连 HTTPS 的握手个数，以及产品请求头和 HTTP/2 设置表，都跟着 `tls=`。页面复查了 100 和 159。记录长度不要求逐字节相同。不要加 JA3 开关。
 3. C 客户端安装名已经完成。`otool -D` 打印 `@rpath/libruyijs_client.dylib`，rpath 是 `@executable_path`。
 4. 图像像素。继续用 ImageIO。可以用一条夹具记下 GIF 背景色差异。只有 ImageIO 已经提供对应 disposal 时才改像素。

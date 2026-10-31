@@ -22,14 +22,24 @@ class Reader:
     def end(self):
         if self.data.read(1):raise ValueError('Trailing WebTransport frame data')
 
+def _read_exact(size):
+    chunks=[]
+    while size:
+        chunk=sys.stdin.buffer.read(size)
+        if not chunk:
+            if not chunks:return None
+            raise ValueError('Truncated WebTransport frame')
+        chunks.append(chunk)
+        size-=len(chunk)
+    return b''.join(chunks)
+
 def receive():
-    head=sys.stdin.buffer.read(4)
-    if not head:return None
-    if len(head)!=4:raise ValueError('Truncated WebTransport frame')
+    head=_read_exact(4)
+    if head is None:return None
     size=struct.unpack('<I',head)[0]
     if size>LIMIT:raise ValueError('WebTransport frame limit')
-    data=sys.stdin.buffer.read(size)
-    if len(data)!=size:raise ValueError('Truncated WebTransport frame')
+    data=_read_exact(size)
+    if data is None:raise ValueError('Truncated WebTransport frame')
     return Reader(data)
 
 def emit(events):
