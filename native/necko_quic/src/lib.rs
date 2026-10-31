@@ -14,7 +14,12 @@ use std::time::{Duration, Instant};
 
 use neqo_common::event::Provider;
 use neqo_common::{Datagram, Header, Tos};
-use neqo_http3::{Http3Client, Http3ClientEvent, Http3Parameters, Http3State, Priority};
+use neqo_http3::features::extended_connect::session::CloseReason as WebTransportClose;
+use neqo_http3::webtransport::ClientSession as _;
+use neqo_http3::{
+    Http3Client, Http3ClientEvent, Http3Parameters, Http3State, Priority, WebTransportEvent,
+};
+use neqo_transport::streams::SendGroupId;
 use neqo_transport::{
     AppError, CloseReason, ConnectionParameters, Output, RandomConnectionIdGenerator, StreamId,
     StreamType, Version,
@@ -264,7 +269,257 @@ fn push_event(events: &mut Vec<Value>, event: Http3ClientEvent) {
         Http3ClientEvent::StopSending { stream_id, error } => {
             events.push(json!({"type": "stop_sending", "stream": stream_number(stream_id), "error": error}));
         }
+        Http3ClientEvent::WebTransport(event) => push_webtransport(events, event),
         _ => {}
+    }
+}
+
+fn push_webtransport(events: &mut Vec<Value>, event: WebTransportEvent) {
+    match event {
+        WebTransportEvent::Negotiated(available) => {
+            events.push(json!({"type": "wt_negotiated", "available": available}));
+        }
+        WebTransportEvent::NewSession { stream_id, status, .. } => {
+            events.push(json!({
+                "type": "wt_session",
+                "stream": stream_number(stream_id),
+                "session": stream_number(stream_id),
+                "status": status,
+            }));
+        }
+        WebTransportEvent::Datagram { session_id, datagram } => {
+            events.push(json!({
+                "type": "wt_datagram",
+                "session": stream_number(session_id),
+                "data": b64_encode(datagram.as_ref()),
+            }));
+        }
+        WebTransportEvent::NewStream { stream_id, session_id } => {
+            let stream = stream_number(stream_id);
+            events.push(json!({
+                "type": "wt_stream",
+                "stream": stream,
+                "session": stream_number(session_id),
+                "bidirectional": stream & 2 == 0,
+            }));
+        }
+        WebTransportEvent::Draining { stream_id } => {
+            events.push(json!({"type": "wt_draining", "stream": stream_number(stream_id)}));
+        }
+        WebTransportEvent::SessionClosed { stream_id, reason, .. } => {
+            let (clean, code, text) = match reason {
+                WebTransportClose::Clean { error, message } => (true, u64::from(error), message),
+                WebTransportClose::Error(error) => (false, error, error.to_string()),
+                WebTransportClose::Status(status) => (false, u64::from(status), status.to_string()),
+            };
+            events.push(json!({
+                "type": "wt_closed",
+                "session": stream_number(stream_id),
+                "stream": stream_number(stream_id),
+                "clean": clean,
+                "code": code,
+                "reason": text,
+            }));
+        }
+    }
+}
+
+fn optional_u64(body: &Value, key: &str) -> Option<u64> {
+    match body.get(key) {
+        None | Some(Value::Null) => None,
+        Some(value) => value.as_u64(),
+    }
+}
+
+fn required_stream(body: &Value, key: &str) -> Result<StreamId, String> {
+    let value = body
+        .get(key)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| format!("webtransport {key} is missing"))?;
+    Ok(stream_id(value))
+}
+
+fn header_rows(body: &Value) -> Result<Vec<Header>, String> {
+    let mut headers = Vec::new();
+    let Some(rows) = body.get("headers").and_then(Value::as_array) else {
+        return Ok(headers);
+    };
+    for row in rows {
+        let pair = row.as_array().ok_or("webtransport header is not a pair")?;
+        let name = pair.first().and_then(Value::as_str).unwrap_or("");
+        let encoded = pair.get(1).and_then(Value::as_str).unwrap_or("");
+        let value = b64_decode(encoded).map_err(|_| "webtransport header value is not base64".to_string())?;
+        headers.push(Header::new(name, value));
+    }
+    Ok(headers)
+}
+
+fn command_webtransport(session: &mut Session, body: &Value) -> Result<Value, String> {
+    let action = body.get("action").and_then(Value::as_str).unwrap_or("");
+    let now = Instant::now();
+    match action {
+        "open" => {
+            let authority = body.get("authority").and_then(Value::as_str).unwrap_or("");
+            let path = body.get("path").and_then(Value::as_str).unwrap_or("/");
+            let headers = header_rows(body)?;
+            let stream = session
+                .client
+                .webtransport_create_session(now, ("https", authority, path), &headers)
+                .map_err(|error| error.to_string())?;
+            Ok(json!({"session": stream_number(stream)}))
+        }
+        "info" => {
+            let id = required_stream(body, "session")?;
+            let size = session
+                .client
+                .webtransport_max_datagram_size(id)
+                .map_err(|error| error.to_string())?;
+            let protocol = session
+                .client
+                .webtransport_session_protocol(id)
+                .map_err(|error| error.to_string())?;
+            let stats = session
+                .client
+                .webtransport_session_stats(id)
+                .map_err(|error| error.to_string())?;
+            Ok(json!({
+                "maxDatagramSize": size,
+                "protocol": protocol,
+                "datagramsExpiredOutgoing": stats.datagrams_expired_outgoing,
+            }))
+        }
+        "stream" => {
+            let id = required_stream(body, "session")?;
+            let bidirectional = body.get("bidirectional").and_then(Value::as_bool).unwrap_or(true);
+            let kind = if bidirectional { StreamType::BiDi } else { StreamType::UniDi };
+            let stream = if let Some(group) = optional_u64(body, "group") {
+                session
+                    .client
+                    .webtransport_create_stream_with_send_group(id, kind, Some(SendGroupId::new(group)))
+                    .map_err(|error| error.to_string())?
+            } else {
+                session
+                    .client
+                    .webtransport_create_stream(id, kind)
+                    .map_err(|error| error.to_string())?
+            };
+            if let Some(order) = body.get("order").and_then(Value::as_i64) {
+                session
+                    .client
+                    .webtransport_set_sendorder(stream, Some(order))
+                    .map_err(|error| error.to_string())?;
+            }
+            Ok(json!({"stream": stream_number(stream)}))
+        }
+        "datagram" => {
+            let id = required_stream(body, "session")?;
+            let encoded = body.get("data").and_then(Value::as_str).unwrap_or("");
+            let data = b64_decode(encoded).map_err(|_| "webtransport datagram is not base64".to_string())?;
+            let queued = session
+                .client
+                .webtransport_send_datagram(id, &data, None::<u64>, now)
+                .map_err(|error| error.to_string())?;
+            Ok(json!({"queued": queued}))
+        }
+        "reset" => {
+            let id = required_stream(body, "stream")?;
+            let code = body.get("code").and_then(Value::as_u64).unwrap_or(0);
+            session
+                .client
+                .stream_reset_send(id, code)
+                .map_err(|error| error.to_string())?;
+            Ok(json!({}))
+        }
+        "stop" => {
+            let id = required_stream(body, "stream")?;
+            let code = body.get("code").and_then(Value::as_u64).unwrap_or(0);
+            session
+                .client
+                .stream_stop_sending(id, code)
+                .map_err(|error| error.to_string())?;
+            Ok(json!({}))
+        }
+        "group" => {
+            let id = required_stream(body, "session")?;
+            let group = session
+                .client
+                .webtransport_create_send_group(id)
+                .map_err(|error| error.to_string())?;
+            Ok(json!({"group": group.as_u64()}))
+        }
+        "order" => {
+            let id = required_stream(body, "stream")?;
+            let order = body.get("order").and_then(Value::as_i64);
+            session
+                .client
+                .webtransport_set_sendorder(id, order)
+                .map_err(|error| error.to_string())?;
+            Ok(json!({}))
+        }
+        "set_group" => {
+            let id = required_stream(body, "stream")?;
+            if let Some(group) = optional_u64(body, "group") {
+                session
+                    .client
+                    .webtransport_set_sendgroup(id, SendGroupId::new(group))
+                    .map_err(|error| error.to_string())?;
+            } else {
+                session
+                    .client
+                    .webtransport_clear_sendgroup(id)
+                    .map_err(|error| error.to_string())?;
+            }
+            Ok(json!({}))
+        }
+        "export" => {
+            let id = required_stream(body, "session")?;
+            let label = b64_decode(body.get("label").and_then(Value::as_str).unwrap_or(""))
+                .map_err(|_| "webtransport export label is not base64".to_string())?;
+            let context = b64_decode(body.get("context").and_then(Value::as_str).unwrap_or(""))
+                .map_err(|_| "webtransport export context is not base64".to_string())?;
+            let mut out = vec![0u8; 32];
+            session
+                .client
+                .webtransport_export_keying_material(id, &label, &context, &mut out)
+                .map_err(|error| error.to_string())?;
+            Ok(json!({"data": b64_encode(&out)}))
+        }
+        "close" => {
+            let id = required_stream(body, "session")?;
+            let code = body.get("code").and_then(Value::as_u64).unwrap_or(0);
+            let reason = body.get("reason").and_then(Value::as_str).unwrap_or("");
+            let code = u32::try_from(code).map_err(|_| "webtransport close code does not fit".to_string())?;
+            let stats = session
+                .client
+                .webtransport_close_session(id, code, reason, now)
+                .map_err(|error| error.to_string())?;
+            Ok(json!({"datagramsExpiredOutgoing": stats.datagrams_expired_outgoing}))
+        }
+        "stream_stats" => {
+            let id = required_stream(body, "stream")?;
+            let sending = body.get("sending").and_then(Value::as_bool).unwrap_or(true);
+            if sending {
+                let stats = session
+                    .client
+                    .webtransport_send_stream_stats(id)
+                    .map_err(|error| error.to_string())?;
+                Ok(json!({
+                    "bytesWritten": stats.bytes_written(),
+                    "bytesSent": stats.bytes_sent(),
+                    "bytesAcknowledged": stats.bytes_acked(),
+                }))
+            } else {
+                let stats = session
+                    .client
+                    .webtransport_recv_stream_stats(id)
+                    .map_err(|error| error.to_string())?;
+                Ok(json!({
+                    "bytesReceived": stats.bytes_received(),
+                    "bytesRead": stats.bytes_read(),
+                }))
+            }
+        }
+        _ => Err(format!("unknown webtransport action {action}")),
     }
 }
 
@@ -520,6 +775,7 @@ fn dispatch(handle: u64, body: &Value) -> Result<Value, String> {
             });
             Ok(json!({}))
         }
+        "webtransport" => with_session(handle, |session| command_webtransport(session, body)),
         _ => Err(format!("unknown HTTP/3 command {op}")),
     }
 }
