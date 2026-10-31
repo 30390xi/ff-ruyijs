@@ -14,6 +14,10 @@ made for web scraping, JS reverse engineering, data collection, and getting past
 
 <a href="https://www.fastaitoken.com"><img src="assets/sponsor-fastaitoken.png" height="42" alt="FastAIToken"></a>
 
+<sub>Contributors</sub>
+
+<a href="https://github.com/Facetomyself" title="Facetomyself · #4 macOS arm64 shell, #6 QUIC profiles"><img src="assets/contributors/Facetomyself.png" width="48" height="48" alt="Facetomyself"></a>&nbsp;&nbsp;<a href="https://github.com/Starktomy" title="Starktomy · #5 Linux runtime"><img src="assets/contributors/Starktomy.png" width="48" height="48" alt="Starktomy"></a>
+
 **[Install](#-installation)** &nbsp;·&nbsp; **[Features](#-features)** &nbsp;·&nbsp; **[Verification systems](#-verification-systems-it-defeats)** &nbsp;·&nbsp; **[Examples](#-examples)** &nbsp;·&nbsp; **[FAQ](#-faq--troubleshooting)** &nbsp;·&nbsp; **[Contact](#-contact)** &nbsp;·&nbsp; **[LinuxDO](https://linux.do/t/topic/3078486)** &nbsp;·&nbsp; **English** · [简体中文](README.zh-CN.md)
 
 > **⚠️ Disclaimer:** This project is for researching next-generation AI browsers. Any form of brute-force reverse engineering is strictly rejected. The source code is open source under the AGPL-3.0; closed-source or proprietary use requires a commercial license.
@@ -327,14 +331,3 @@ Mozilla-derived code (SpiderMonkey, Necko) stays under the MPL-2.0. Releases up 
 See [`NOTICE`](NOTICE) for third-party attributions.
 
 If ff-ruyijs saved you from reimplementing a browser, a ⭐ helps others find it.
-
-## 🤝 Contributors
-
-Thanks to everyone who has opened a pull request:
-
-<table>
-<tr>
-<td align="center" width="150"><a href="https://github.com/Facetomyself"><img src="https://avatars.githubusercontent.com/u/103901201?v=4" width="80" height="80" alt="Facetomyself"><br><b>Facetomyself</b></a><br><sub><a href="https://github.com/cutetailbud/ff-ruyijs/pull/4">#4 macOS arm64 shell</a>, <a href="https://github.com/cutetailbud/ff-ruyijs/pull/6">#6 QUIC profiles</a></sub></td>
-<td align="center" width="150"><a href="https://github.com/Starktomy"><img src="https://avatars.githubusercontent.com/u/37720599?v=4" width="80" height="80" alt="Starktomy"><br><b>Starktomy</b></a><br><sub><a href="https://github.com/cutetailbud/ff-ruyijs/pull/5">#5 Linux runtime</a></sub></td>
-</tr>
-</table>
